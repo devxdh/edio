@@ -6,58 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/devxdh/igit/pkg/testutil"
 )
 
-func setupTestRepo(tb testing.TB, prefix string) string {
-	tb.Helper()
-
-	tmpDir, err := os.MkdirTemp("", prefix)
-	if err != nil {
-		tb.Fatalf("failed to create temp repo dir: %v", err)
-	}
-
-	origWd, err := os.Getwd()
-	if err != nil {
-		tb.Fatalf("failed to get working dir: %v", err)
-	}
-
-	if err := os.Chdir(tmpDir); err != nil {
-		tb.Fatalf("failed to change dir to temp repo: %v", err)
-	}
-
-	tb.Cleanup(func() {
-		_ = os.Chdir(origWd)
-		_ = os.RemoveAll(tmpDir)
-	})
-
-	if _, err := RunGit("init"); err != nil {
-		tb.Fatalf("git init failed: %v", err)
-	}
-
-	if _, err := RunGit("config", "user.name", "igit-test-bot"); err != nil {
-		tb.Fatalf("failed to set user.name: %v", err)
-	}
-	if _, err := RunGit("config", "user.email", "bot@igit.dev"); err != nil {
-		tb.Fatalf("failed to set user.email: %v", err)
-	}
-
-	internalFile := filepath.Join(tmpDir, "README.md")
-	if err := os.WriteFile(internalFile, []byte("# Base Project\n"), 0o644); err != nil {
-		tb.Fatalf("failed to write initial README: %v", err)
-	}
-	if _, err := RunGit("add", "README.md"); err != nil {
-		tb.Fatalf("failed to stage README: %v", err)
-	}
-
-	if _, err := RunGit("commit", "-m", "initial commit on main"); err != nil {
-		tb.Fatalf("failed to make initial commit: %v", err)
-	}
-
-	return tmpDir
-}
-
 func TestZeroPollution(t *testing.T) {
-	setupTestRepo(t, "igit-operations-test-*")
+	testutil.SetupTestRepo(t, "igit-operations-test-*")
 
 	baselineHeadSHA, err := GetRef("HEAD")
 	if err != nil || baselineHeadSHA == "" {
@@ -118,7 +72,7 @@ func TestZeroPollution(t *testing.T) {
 }
 
 func BenchmarkTurnSnapshotLatency(b *testing.B) {
-	tmpDir := setupTestRepo(b, "igit-operations-bench-*")
+	tmpDir := testutil.SetupTestRepo(b, "igit-operations-bench-*")
 
 	testFile := filepath.Join(tmpDir, "index.ts")
 	if err := os.WriteFile(testFile, []byte("console.log('Hello from Benchmark');"), 0o644); err != nil {
