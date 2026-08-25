@@ -13,11 +13,13 @@ import (
 func TestZeroPollution(t *testing.T) {
 	testutil.SetupTestRepo(t, "igit-operations-test-*")
 
+	// 1. Capture baseline HEAD commit before any shadow turns are recorded
 	baselineHeadSHA, err := GetRef("HEAD")
 	if err != nil || baselineHeadSHA == "" {
 		t.Fatalf("failed to get baseline HEAD SHA: %v", err)
 	}
 
+	// 2. Simulate 5 shadow turns by creating blobs, trees, and custom refs
 	var parentSHA string
 	for turn := range 5 {
 		srcFile := "main.go"
@@ -53,6 +55,7 @@ func TestZeroPollution(t *testing.T) {
 		parentSHA = commitSHA
 	}
 
+	// 3. Verify HEAD was not moved during the entire process
 	currentHeadSHA, err := GetRef("HEAD")
 	if err != nil {
 		t.Fatalf("failed to query HEAD: %v", err)
@@ -62,6 +65,7 @@ func TestZeroPollution(t *testing.T) {
 		t.Fatalf("POLLUTION VIOLATION: HEAD moved from %s to %s", baselineHeadSHA, currentHeadSHA)
 	}
 
+	// 4. Verify each individual turn ref exists on disk and resolves to a valid SHA
 	for turn := range 5 {
 		ref := fmt.Sprintf("refs/igit/sessions/sess_alpha/%d", turn)
 		sha, err := GetRef(ref)
