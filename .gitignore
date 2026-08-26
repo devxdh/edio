@@ -2,3 +2,5 @@ EDIO.md
 .claude
 graphify-out
 bin
+sandbox/
+coverage.out
