@@ -7,13 +7,13 @@ import (
 
 func TestFormatDiff_BinaryGuardrail(t *testing.T) {
 	binaryDiff := "diff --git a/image.png b/image.png\nBinary files differ"
-	formatted := FormatDiff(binaryDiff)
+	formatted, _, _ := FormatDiff(binaryDiff)
 	if !strings.Contains(formatted, "Binary file changes detected") {
 		t.Fatalf("expected binary detection warning, got %q", formatted)
 	}
 
 	gitBinaryDiff := "GIT binary patch\nliteral 1024..."
-	formatted2 := FormatDiff(gitBinaryDiff)
+	formatted2, _, _ := FormatDiff(gitBinaryDiff)
 	if !strings.Contains(formatted2, "Binary file changes detected") {
 		t.Fatalf("expected binary detection warning for git binary patch, got %q", formatted2)
 	}
@@ -26,7 +26,7 @@ func TestFormatDiff_LargePayloadGuardrail(t *testing.T) {
 		t.Fatalf("expected largeDiff > %d bytes, got %d", maxDiffLength, len(largeDiff))
 	}
 
-	formatted := FormatDiff(largeDiff)
+	formatted, _, _ := FormatDiff(largeDiff)
 	if !strings.Contains(formatted, "Diff payload exceeds 200KB") {
 		t.Fatalf("expected payload truncation warning, got %q", formatted[:200])
 	}
@@ -43,7 +43,7 @@ index 1234567..89abcdef 100644
 +func Health() string { return "OK" }
 -func Dead() string { return "NO" }
 `
-	formatted := FormatDiff(sampleDiff)
+	formatted, _, _ := FormatDiff(sampleDiff)
 
 	// Invariants:
 	// 1. Git plumbing stripped
