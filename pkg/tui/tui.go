@@ -1,4 +1,3 @@
-// Package tui contains the terminal user interface for edio
 package tui
 
 import (
@@ -87,7 +86,6 @@ func Launch() error {
 		revHistory[len(history)-1-i] = turn
 	}
 
-	// Safe SHA retrieval
 	getSafeSHA := func(rawSHA string) string {
 		clean := strings.TrimSpace(rawSHA)
 		if len(clean) >= 7 {
@@ -119,24 +117,21 @@ func Launch() error {
 		}
 
 		shaDisplay := getSafeSHA(sha)
-		// Display full commit message and SHA in the header
 		fullMsg := strings.TrimSpace(record.Message)
 		diffView.SetTitle(fmt.Sprintf(" [::b]Turn %d: %s - %s[::-] ", record.Turn, shaDisplay, tview.Escape(fullMsg)))
 		diffView.SetText(FormatDiff(rawDiff))
 		diffView.ScrollToBeginning()
 	}
 
-	// Populate Left Pane List with Escaped Brackets
+	// Populate Left Pane List
 	for _, turn := range revHistory {
 		record := turn
 		ref := sess.ActiveRef(record.Turn)
 		sha, _ := gitengine.GetRef(ref)
 		shaDisplay := getSafeSHA(sha)
 
-		// ESCAPE the brackets so tview doesn't parse the SHA as a color tag
 		mainText := fmt.Sprintf("● Turn %-2d [gray][[-][aqua]%s[gray]][-]", record.Turn, shaDisplay)
 
-		// Clean message
 		msg := strings.TrimSpace(record.Message)
 		if msg == "" {
 			msg = "turn snapshot"
@@ -146,7 +141,6 @@ func Launch() error {
 		turnList.AddItem(mainText, secText, 0, nil)
 	}
 
-	// Trigger initial diff rendering for newest turn
 	if len(revHistory) > 0 {
 		updateDiffForTurn(revHistory[0])
 	} else {
@@ -168,9 +162,32 @@ func Launch() error {
 		SetScrollable(true).
 		SetWrap(false)
 
-	// Direct Input Capture on diffView for 3-line step j/k scrolling
+	// Input Capture on diffView for vertical (j/k) and horizontal (h/l/arrows) scrolling
 	diffView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		row, col := diffView.GetScrollOffset()
+		switch event.Key() {
+		case tcell.KeyLeft:
+			if col >= 4 {
+				diffView.ScrollTo(row, col-4)
+			} else {
+				diffView.ScrollTo(row, 0)
+			}
+			return nil
+		case tcell.KeyRight:
+			diffView.ScrollTo(row, col+4)
+			return nil
+		case tcell.KeyUp:
+			if row >= 3 {
+				diffView.ScrollTo(row-3, col)
+			} else {
+				diffView.ScrollTo(0, col)
+			}
+			return nil
+		case tcell.KeyDown:
+			diffView.ScrollTo(row+3, col)
+			return nil
+		}
+
 		switch event.Rune() {
 		case 'j':
 			diffView.ScrollTo(row+3, col)
@@ -182,14 +199,52 @@ func Launch() error {
 				diffView.ScrollTo(0, col)
 			}
 			return nil
+		case 'h':
+			if col >= 4 {
+				diffView.ScrollTo(row, col-4)
+			} else {
+				diffView.ScrollTo(row, 0)
+			}
+			return nil
+		case 'l':
+			diffView.ScrollTo(row, col+4)
+			return nil
 		}
 		return event
 	})
 
-	// 4. Bottom Bar: Escaped Keys
+	// Mouse Capture on diffView for horizontal & vertical scroll
+	diffView.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
+		row, col := diffView.GetScrollOffset()
+		switch action {
+		case tview.MouseScrollLeft:
+			if col >= 4 {
+				diffView.ScrollTo(row, col-4)
+			} else {
+				diffView.ScrollTo(row, 0)
+			}
+			return action, nil
+		case tview.MouseScrollRight:
+			diffView.ScrollTo(row, col+4)
+			return action, nil
+		case tview.MouseScrollUp:
+			if row >= 3 {
+				diffView.ScrollTo(row-3, col)
+			} else {
+				diffView.ScrollTo(0, col)
+			}
+			return action, nil
+		case tview.MouseScrollDown:
+			diffView.ScrollTo(row+3, col)
+			return action, nil
+		}
+		return action, event
+	})
+
+	// 4. Bottom Bar
 	bottomBar.SetDynamicColors(true)
 	renderBottomBar := func(statusMsg string) {
-		baseHelp := " [gray][[yellow::b]j/k/↑/↓[gray::-]][white] Select Turn  [gray]•[white]  [gray][[yellow::b]Tab/h/l[gray::-]][white] Switch Pane  [gray]•[white]  [gray][[yellow::b]r[gray::-]][white] Revert Workspace  [gray]•[white]  [gray][[yellow::b]q/Esc[gray::-]][white] Quit"
+		baseHelp := " [gray][[yellow::b]j/k/↑/↓[gray::-]][white] Select Turn  [gray]•[white]  [gray][[yellow::b]Tab[gray::-]][white] Switch Pane  [gray]•[white]  [gray][[yellow::b]h/l/←/→[gray::-]][white] Scroll Diff  [gray]•[white]  [gray][[yellow::b]r[gray::-]][white] Revert Workspace  [gray]•[white]  [gray][[yellow::b]q/Esc[gray::-]][white] Quit"
 		if statusMsg != "" {
 			bottomBar.SetText(fmt.Sprintf(" %s  [gray]•[white]%s", statusMsg, baseHelp))
 		} else {
@@ -198,7 +253,7 @@ func Launch() error {
 	}
 	renderBottomBar("")
 
-	// Main Split Flex: Left gets 2 units (40%), Right gets 3 units (60%) for wider message display
+	// Main Split: Left gets 2 units (40%), Right gets 3 units (60%)
 	mainSplit := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
 		AddItem(turnList, 0, 2, true).
@@ -246,16 +301,6 @@ func Launch() error {
 			return nil
 		}
 
-		if runeChar == 'h' || runeChar == 'l' {
-			if app.GetFocus() == turnList {
-				app.SetFocus(diffView)
-			} else {
-				app.SetFocus(turnList)
-			}
-			updateFocusColors()
-			return nil
-		}
-
 		if runeChar == 'r' || runeChar == 'R' {
 			idx := turnList.GetCurrentItem()
 			if idx >= 0 && idx < len(revHistory) {
@@ -268,10 +313,12 @@ func Launch() error {
 					renderBottomBar(fmt.Sprintf("[red]✘ Error: %v[-]", err))
 				} else {
 					safeSHA := getSafeSHA(sha)
-					renderBottomBar(fmt.Sprintf(
-						"[green]✔ Workspace reverted to Turn %d (%s)[-]",
-						selectedTurn.Turn, safeSHA,
-					))
+					renderBottomBar(
+						fmt.Sprintf(
+							"[green]✔ Workspace reverted to Turn %d (%s)[-]",
+							selectedTurn.Turn, safeSHA,
+						),
+					)
 					updateDiffForTurn(selectedTurn)
 				}
 			}

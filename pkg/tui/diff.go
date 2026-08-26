@@ -12,7 +12,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-const targetLineWidth = 220
+const targetLineWidth = 240
 
 var (
 	chromaStyle = styles.Get("github-dark")
@@ -68,7 +68,7 @@ func highlightTokensToTview(lexer chroma.Lexer, codeText, bgHex string) (string,
 }
 
 // FormatDiff cleans raw git diff output into GitHub/Delta style with line numbers,
-// full-line background tints, and github-dark syntax-highlighted tokens.
+// horizontal line width preservation, and syntax-highlighted tokens.
 func FormatDiff(rawDiff string) string {
 	if strings.TrimSpace(rawDiff) == "" {
 		return "\n  [#8b949e]No modifications between this turn and current workspace.[-]"
@@ -95,12 +95,12 @@ func FormatDiff(rawDiff string) string {
 			continue
 		}
 
-		// 2. Discard unwanted file header markers
+		// 2. Discard raw file header markers
 		if strings.HasPrefix(line, "--- a/") || strings.HasPrefix(line, "--- /dev/null") || strings.HasPrefix(line, "+++ /dev/null") {
 			continue
 		}
 
-		// 3. Clean File Header Bar (+++ b/path) & reset language lexer
+		// 3. Clean File Header Bar (+++ b/path) & update language lexer
 		if strings.HasPrefix(line, "+++ b/") {
 			filePath := strings.TrimPrefix(line, "+++ b/")
 			matchedLexer := lexers.Match(filePath)
@@ -110,7 +110,7 @@ func FormatDiff(rawDiff string) string {
 				currentLexer = lexers.Fallback
 			}
 
-			header := fmt.Sprintf("\n[aqua::b] ▾ %s[-::-]\n[#30363d]%s[-]", filePath, strings.Repeat("─", 60))
+			header := fmt.Sprintf("\n[aqua::b] ▾ %s[-::-]\n[#30363d]%s[-]", filePath, strings.Repeat("─", 70))
 			formattedLines = append(formattedLines, header)
 			continue
 		}
@@ -163,7 +163,7 @@ func FormatDiff(rawDiff string) string {
 			continue
 		}
 
-		// 7. Unchanged Context Lines: Both old and new lines incremented
+		// 7. Unchanged Context Lines: Both lines incremented
 		if strings.HasPrefix(line, " ") {
 			codeText := strings.TrimPrefix(line, " ")
 			gutter := fmt.Sprintf("[#6e7681]%4d %4d   [-]", oldLine, newLine)
