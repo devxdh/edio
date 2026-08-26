@@ -18,8 +18,8 @@ polluting your staging index or git commit history.`,
   edio snapshot -m "added JWT"  Record an isolated turn snapshot
   edio run claude "fix bug"     Execute agent and auto-snapshot on exit
   edio log                      Display active turn history
+  edio diff 2                   View syntax-highlighted diff for Turn 2
   edio restore 2                Restore workspace to Turn 2 state
-  edio restore 2 -f file.go     Restore a single file from Turn 2
   edio accept "feat: add auth"  Squash active turns into a commit on main`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()

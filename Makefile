@@ -10,13 +10,13 @@ install:
 	go install ./cmd/edio
 
 clean:
-	rm -rf bin/ .git/edio
+	rm -rf bin/ .git/edio /tmp/edio-demo-session
 
 dev:
 	go run ./cmd/edio/
 
 demo: build
-	@echo "--- Running Edio CLI Demo ---"
+	@echo "--- Running Edio Utilitarian Engine Demo ---"
 	@TEST_DIR=$$(mktemp -d); \
 	cd $$TEST_DIR && \
 	git init -q && \
@@ -31,6 +31,7 @@ demo: build
 	echo "turn 2 changes" >> file.txt && \
 	$(CURDIR)/bin/edio snapshot -m "added line in turn 2" && \
 	$(CURDIR)/bin/edio log && \
+	$(CURDIR)/bin/edio diff 2 && \
 	$(CURDIR)/bin/edio restore 1 && \
 	$(CURDIR)/bin/edio accept "feat: add multi-turn feature" && \
 	rm -rf $$TEST_DIR

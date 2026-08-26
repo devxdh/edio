@@ -90,3 +90,8 @@ func Error(msg string) string {
 func Bullet(msg string) string {
 	return colorize(green, "  •") + " " + msg
 }
+
+// Header returns text formatted in bold.
+func Header(s string) string {
+	return colorize(bold, s)
+}

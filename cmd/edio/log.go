@@ -9,6 +9,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	logShowPatch bool
+	logLimit     int
+)
+
 var logCmd = &cobra.Command{
 	Use:   "log",
 	Short: "Display the turn history for the active session",
@@ -32,9 +37,31 @@ var logCmd = &cobra.Command{
 			return nil
 		}
 
+		displayCount := len(history)
+		if logLimit > 0 && logLimit < displayCount {
+			displayCount = logLimit
+		}
+
 		fmt.Printf("Session %s (%d turns)\n\n", ui.Bold(sess.ID), sess.TurnCount)
-		for _, record := range history {
+
+		for i := 0; i < displayCount; i++ {
+			record := history[i]
 			fmt.Printf("* %s %s %s\n", ui.TurnBadge(record.Turn), ui.SHABadge(record.SHA), record.Message)
+
+			if logShowPatch {
+				parentSHA := "HEAD"
+				if record.Turn > 1 {
+					parentRef := sess.ActiveRef(record.Turn - 1)
+					pSHA, err := gitengine.GetRef(parentRef)
+					if err == nil && pSHA != "" {
+						parentSHA = pSHA
+					}
+				}
+				patchDiff, err := gitengine.RunGit("diff", parentSHA, record.SHA)
+				if err == nil && patchDiff != "" {
+					fmt.Println(ui.Dim(patchDiff))
+				}
+			}
 		}
 		fmt.Println()
 		return nil
@@ -42,5 +69,7 @@ var logCmd = &cobra.Command{
 }
 
 func init() {
+	logCmd.Flags().BoolVarP(&logShowPatch, "patch", "p", false, "Show patch diff for each turn")
+	logCmd.Flags().IntVarP(&logLimit, "number", "n", 0, "Limit maximum number of turns to display")
 	rootCmd.AddCommand(logCmd)
 }
