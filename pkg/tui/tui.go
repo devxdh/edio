@@ -1,3 +1,4 @@
+// Package tui contains the terminal user interface for edio
 package tui
 
 import (
@@ -9,6 +10,29 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
+
+// wrapWords splits long text strings into multi-line chunks of maximum maxLen characters.
+func wrapWords(text string, maxLen int) string {
+	if maxLen <= 10 {
+		maxLen = 30
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return ""
+	}
+	var lines []string
+	cur := words[0]
+	for _, w := range words[1:] {
+		if len(cur)+1+len(w) <= maxLen {
+			cur += " " + w
+		} else {
+			lines = append(lines, cur)
+			cur = w
+		}
+	}
+	lines = append(lines, cur)
+	return strings.Join(lines, "\n  ")
+}
 
 // Launch initializes and runs the interactive tview TUI application.
 func Launch() error {
@@ -26,6 +50,18 @@ func Launch() error {
 		return fmt.Errorf("failed to retrieve history: %w", err)
 	}
 
+	// Configure GitHub Dark Dimmed Palette (#161b22 / #1c2128 / #30363d)
+	darkGreyBG := tcell.NewHexColor(0x161b22)
+	panelGreyBG := tcell.NewHexColor(0x1c2128)
+	borderGrey := tcell.NewHexColor(0x30363d)
+
+	tview.Styles.PrimitiveBackgroundColor = darkGreyBG
+	tview.Styles.ContrastBackgroundColor = panelGreyBG
+	tview.Styles.MoreContrastBackgroundColor = tcell.NewHexColor(0x21262d)
+	tview.Styles.PrimaryTextColor = tcell.ColorWhite
+	tview.Styles.SecondaryTextColor = tcell.ColorLightGray
+	tview.Styles.BorderColor = borderGrey
+
 	app := tview.NewApplication()
 	app.EnableMouse(true)
 
@@ -34,14 +70,18 @@ func Launch() error {
 	diffView := tview.NewTextView()
 	bottomBar := tview.NewTextView()
 
-	// 1. Left Pane: Turn Timeline (tview.List)
+	turnList.SetBackgroundColor(darkGreyBG)
+	diffView.SetBackgroundColor(darkGreyBG)
+	bottomBar.SetBackgroundColor(panelGreyBG)
+
+	// Left Pane: Turn Timeline (tview.List)
 	turnList.SetBorder(true).
 		SetTitle("[::b]Turn Timeline[::-]").
 		SetBorderColor(tcell.ColorAqua)
 
 	turnList.SetMainTextColor(tcell.ColorLightCyan).
 		SetSecondaryTextColor(tcell.ColorLightGray).
-		SetSelectedBackgroundColor(tcell.ColorDarkSlateGray).
+		SetSelectedBackgroundColor(tcell.NewHexColor(0x21262d)).
 		SetSelectedTextColor(tcell.ColorWhite)
 
 	// Direct Input Capture on turnList for Vim-style j/k navigation
@@ -101,7 +141,7 @@ func Launch() error {
 			rawDiff = ""
 		}
 
-		shaDisplay := getSafeSHA(record.SHA)
+		shaDisplay := getSafeSHA(sha)
 		diffView.SetTitle(fmt.Sprintf("[::b]Diff (Turn %d: %s vs Workspace)[::-]", record.Turn, shaDisplay))
 		diffView.SetText(FormatDiff(rawDiff))
 		diffView.ScrollToBeginning()
@@ -109,12 +149,12 @@ func Launch() error {
 
 	for _, turn := range revHistory {
 		record := turn
-		shaDisplay := getSafeSHA(record.SHA)
+		ref := sess.ActiveRef(record.Turn)
+		sha, _ := gitengine.GetRef(ref)
+		shaDisplay := getSafeSHA(sha)
 		mainText := fmt.Sprintf("● Turn %-2d [%s]", record.Turn, shaDisplay)
 
 		// Get churn stats for turn
-		ref := sess.ActiveRef(record.Turn)
-		sha, _ := gitengine.GetRef(ref)
 		parentSHA := "HEAD"
 		if record.Turn > 1 {
 			parentRef := sess.ActiveRef(record.Turn - 1)
@@ -130,9 +170,10 @@ func Launch() error {
 			churnText = " (" + strings.TrimSpace(diffStat) + ")"
 		}
 
-		// Display full message without aggressive character truncation
-		msg := strings.TrimSpace(record.Message)
-		secText := fmt.Sprintf("  %s%s", msg, churnText)
+		// Multi-line word wrapping for complete message legibility
+		rawMsg := strings.TrimSpace(record.Message)
+		wrappedDesc := wrapWords(rawMsg+churnText, 32)
+		secText := fmt.Sprintf("  %s\n", wrappedDesc)
 
 		turnList.AddItem(mainText, secText, 0, nil)
 	}
@@ -150,10 +191,10 @@ func Launch() error {
 		}
 	})
 
-	// 2. Right Pane: Diff Viewport (tview.TextView)
+	// Right Pane: Diff Viewport (tview.TextView)
 	diffView.SetBorder(true).
 		SetTitle("[::b]Diff (Turn Timeline vs Working Tree)[::-]").
-		SetBorderColor(tcell.ColorDarkGray)
+		SetBorderColor(borderGrey)
 
 	diffView.SetDynamicColors(true).
 		SetScrollable(true).
@@ -177,10 +218,10 @@ func Launch() error {
 		return event
 	})
 
-	// 3. Bottom Bar (tview.TextView)
+	// Bottom Bar (tview.TextView) with Escaped [[R]] Brackets
 	bottomBar.SetDynamicColors(true)
 	renderBottomBar := func(statusMsg string) {
-		baseHelp := " [aqua::b][j/k/↑/↓][-::-] Select Turn  •  [aqua::b][Tab/h/l][-::-] Switch Pane  •  [aqua::b][r][-::-] Revert Workspace  •  [aqua::b][q/Esc][-::-] Quit"
+		baseHelp := " [aqua::b][[j/k/↑/↓]][-::-] Select Turn  •  [aqua::b][[Tab/h/l]][-::-] Switch Pane  •  [aqua::b][[r]][-::-] Revert Workspace  •  [aqua::b][[q/Esc]][-::-] Quit"
 		if statusMsg != "" {
 			bottomBar.SetText(fmt.Sprintf("%s  •  %s", statusMsg, baseHelp))
 		} else {
@@ -205,9 +246,9 @@ func Launch() error {
 	updateFocusColors := func() {
 		if app.GetFocus() == turnList {
 			turnList.SetBorderColor(tcell.ColorAqua)
-			diffView.SetBorderColor(tcell.ColorDarkGray)
+			diffView.SetBorderColor(borderGrey)
 		} else {
-			turnList.SetBorderColor(tcell.ColorDarkGray)
+			turnList.SetBorderColor(borderGrey)
 			diffView.SetBorderColor(tcell.ColorAqua)
 		}
 	}
@@ -259,7 +300,12 @@ func Launch() error {
 					renderBottomBar(fmt.Sprintf("[red]✘ Error: %v[-]", err))
 				} else {
 					safeSHA := getSafeSHA(sha)
-					renderBottomBar(fmt.Sprintf("[green]✔ Workspace reverted to Turn %d (%s)[-]", selectedTurn.Turn, safeSHA))
+					renderBottomBar(
+						fmt.Sprintf(
+							"[green]✔ Workspace reverted to Turn %d (%s)[-]",
+							selectedTurn.Turn, safeSHA,
+						),
+					)
 					updateDiffForTurn(selectedTurn)
 				}
 			}
