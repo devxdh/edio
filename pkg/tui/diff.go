@@ -12,8 +12,6 @@ import (
 	"github.com/rivo/tview"
 )
 
-const targetLineWidth = 240
-
 var (
 	chromaStyle = styles.Get("github-dark")
 	hunkRegex   = regexp.MustCompile(`^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@(.*)$`)
@@ -52,7 +50,7 @@ func highlightTokensToTview(lexer chroma.Lexer, codeText, bgHex string) (string,
 		escapedVal := tview.Escape(val)
 
 		entry := chromaStyle.Get(token.Type)
-		colorHex := "#c9d1d9" // GitHub Dark default text color
+		colorHex := "#c9d1d9"
 		if entry.Colour.IsSet() {
 			colorHex = entry.Colour.String()
 		}
@@ -68,10 +66,10 @@ func highlightTokensToTview(lexer chroma.Lexer, codeText, bgHex string) (string,
 }
 
 // FormatDiff cleans raw git diff output into GitHub/Delta style with line numbers,
-// horizontal line width preservation, and syntax-highlighted tokens.
-func FormatDiff(rawDiff string) string {
+// syntax highlighting, and calculates total lines and maximum line width.
+func FormatDiff(rawDiff string) (string, int, int) {
 	if strings.TrimSpace(rawDiff) == "" {
-		return "\n  [#8b949e]No modifications between this turn and current workspace.[-]"
+		return "\n  [#8b949e]No modifications between this turn and current workspace.[-]", 1, 60
 	}
 
 	lines := strings.Split(rawDiff, "\n")
@@ -84,6 +82,7 @@ func FormatDiff(rawDiff string) string {
 
 	oldLine := 0
 	newLine := 0
+	maxLineLen := 60
 
 	for _, line := range lines {
 		// 1. Drop Git Plumbing lines
@@ -110,7 +109,7 @@ func FormatDiff(rawDiff string) string {
 				currentLexer = lexers.Fallback
 			}
 
-			header := fmt.Sprintf("\n[aqua::b] ▾ %s[-::-]\n[#30363d]%s[-]", filePath, strings.Repeat("─", 70))
+			header := fmt.Sprintf("\n[aqua::b] ▾ %s[-::-]\n[#30363d]%s[-]", filePath, strings.Repeat("─", 60))
 			formattedLines = append(formattedLines, header)
 			continue
 		}
@@ -129,48 +128,51 @@ func FormatDiff(rawDiff string) string {
 			continue
 		}
 
-		// 5. Code Additions (+): Old empty, New line incremented
+		// 5. Code Additions (+)
 		if strings.HasPrefix(line, "+") {
 			codeText := strings.TrimPrefix(line, "+")
 			gutter := fmt.Sprintf("     %4d + ", newLine)
 			newLine++
 
 			highlighted, vLen := highlightTokensToTview(currentLexer, codeText, "#16331c")
-			totalVisLen := len(gutter) + vLen
-			padding := ""
-			if totalVisLen < targetLineWidth {
-				padding = strings.Repeat(" ", targetLineWidth-totalVisLen)
+			totalLen := len(gutter) + vLen
+			if totalLen > maxLineLen {
+				maxLineLen = totalLen
 			}
 
-			formattedLines = append(formattedLines, fmt.Sprintf("[:#16331c][#50fa7b]%s[:-]%s[:#16331c]%s[-:-]", gutter, highlighted, padding))
+			formattedLines = append(formattedLines, fmt.Sprintf("[:#16331c][#50fa7b]%s[:-]%s[-:-]", gutter, highlighted))
 			continue
 		}
 
-		// 6. Code Deletions (-): Old line incremented, New empty
+		// 6. Code Deletions (-)
 		if strings.HasPrefix(line, "-") {
 			codeText := strings.TrimPrefix(line, "-")
 			gutter := fmt.Sprintf("%4d      - ", oldLine)
 			oldLine++
 
 			highlighted, vLen := highlightTokensToTview(currentLexer, codeText, "#3d1a11")
-			totalVisLen := len(gutter) + vLen
-			padding := ""
-			if totalVisLen < targetLineWidth {
-				padding = strings.Repeat(" ", targetLineWidth-totalVisLen)
+			totalLen := len(gutter) + vLen
+			if totalLen > maxLineLen {
+				maxLineLen = totalLen
 			}
 
-			formattedLines = append(formattedLines, fmt.Sprintf("[:#3d1a11][#ff5555]%s[:-]%s[:#3d1a11]%s[-:-]", gutter, highlighted, padding))
+			formattedLines = append(formattedLines, fmt.Sprintf("[:#3d1a11][#ff5555]%s[:-]%s[-:-]", gutter, highlighted))
 			continue
 		}
 
-		// 7. Unchanged Context Lines: Both lines incremented
+		// 7. Unchanged Context Lines
 		if strings.HasPrefix(line, " ") {
 			codeText := strings.TrimPrefix(line, " ")
 			gutter := fmt.Sprintf("[#6e7681]%4d %4d   [-]", oldLine, newLine)
 			oldLine++
 			newLine++
 
-			highlighted, _ := highlightTokensToTview(currentLexer, codeText, "")
+			highlighted, vLen := highlightTokensToTview(currentLexer, codeText, "")
+			totalLen := 12 + vLen
+			if totalLen > maxLineLen {
+				maxLineLen = totalLen
+			}
+
 			formattedLines = append(formattedLines, fmt.Sprintf("%s%s", gutter, highlighted))
 			continue
 		}
@@ -182,8 +184,8 @@ func FormatDiff(rawDiff string) string {
 	}
 
 	if len(formattedLines) == 0 {
-		return "\n  [#8b949e]No modifications between this turn and current workspace.[-]"
+		return "\n  [#8b949e]No modifications between this turn and current workspace.[-]", 1, 60
 	}
 
-	return strings.Join(formattedLines, "\n")
+	return strings.Join(formattedLines, "\n"), len(formattedLines), maxLineLen
 }

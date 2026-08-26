@@ -26,7 +26,7 @@ func Launch() error {
 		return fmt.Errorf("failed to retrieve history: %w", err)
 	}
 
-	// 1. Configure Dark Grey / Slate Palette
+	// Palette configuration
 	darkGreyBG := tcell.NewHexColor(0x161b22)
 	panelGreyBG := tcell.NewHexColor(0x1c2128)
 	borderGrey := tcell.NewHexColor(0x30363d)
@@ -50,7 +50,7 @@ func Launch() error {
 	diffView.SetBackgroundColor(darkGreyBG)
 	bottomBar.SetBackgroundColor(panelGreyBG)
 
-	// 2. Left Pane: Turn Timeline
+	// Left Pane: Turn Timeline
 	turnList.SetBorder(true).
 		SetTitle("[::b]Turn Timeline[::-]").
 		SetBorderColor(tcell.ColorAqua)
@@ -60,7 +60,6 @@ func Launch() error {
 		SetSelectedBackgroundColor(tcell.NewHexColor(0x21262d)).
 		SetSelectedTextColor(tcell.ColorWhite)
 
-	// Direct Input Capture on turnList for Vim-style j/k navigation
 	turnList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		cur := turnList.GetCurrentItem()
 		total := turnList.GetItemCount()
@@ -80,7 +79,7 @@ func Launch() error {
 		return event
 	})
 
-	// Reverse Chronological Order (newest turn at top)
+	// Reverse Chronological Order
 	revHistory := make([]session.TurnRecord, len(history))
 	for i, turn := range history {
 		revHistory[len(history)-1-i] = turn
@@ -97,7 +96,10 @@ func Launch() error {
 		return "-------"
 	}
 
-	// Helper function to update diff viewport for a turn
+	// Bounding limits for diff viewport
+	currentMaxLines := 0
+	currentMaxCols := 0
+
 	updateDiffForTurn := func(record session.TurnRecord) {
 		ref := sess.ActiveRef(record.Turn)
 		sha, _ := gitengine.GetRef(ref)
@@ -119,11 +121,16 @@ func Launch() error {
 		shaDisplay := getSafeSHA(sha)
 		fullMsg := strings.TrimSpace(record.Message)
 		diffView.SetTitle(fmt.Sprintf(" [::b]Turn %d: %s - %s[::-] ", record.Turn, shaDisplay, tview.Escape(fullMsg)))
-		diffView.SetText(FormatDiff(rawDiff))
+
+		formattedText, numLines, maxLineLen := FormatDiff(rawDiff)
+		currentMaxLines = numLines
+		currentMaxCols = maxLineLen
+
+		diffView.SetText(formattedText)
 		diffView.ScrollToBeginning()
 	}
 
-	// Populate Left Pane List
+	// Populate Left Pane
 	for _, turn := range revHistory {
 		record := turn
 		ref := sess.ActiveRef(record.Turn)
@@ -131,7 +138,6 @@ func Launch() error {
 		shaDisplay := getSafeSHA(sha)
 
 		mainText := fmt.Sprintf("● Turn %-2d [gray][[-][aqua]%s[gray]][-]", record.Turn, shaDisplay)
-
 		msg := strings.TrimSpace(record.Message)
 		if msg == "" {
 			msg = "turn snapshot"
@@ -153,7 +159,7 @@ func Launch() error {
 		}
 	})
 
-	// 3. Right Pane: Diff Viewport
+	// Right Pane: Diff Viewport
 	diffView.SetBorder(true).
 		SetTitle("[::b]Diff (Turn Timeline vs Working Tree)[::-]").
 		SetBorderColor(borderGrey)
@@ -162,89 +168,135 @@ func Launch() error {
 		SetScrollable(true).
 		SetWrap(false)
 
-	// Input Capture on diffView for vertical (j/k) and horizontal (h/l/arrows) scrolling
+	// Clamped Keyboard Scrolling
 	diffView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		row, col := diffView.GetScrollOffset()
+		_, _, viewWidth, viewHeight := diffView.GetInnerRect()
+
+		maxColScroll := currentMaxCols - viewWidth
+		if maxColScroll < 0 {
+			maxColScroll = 0
+		}
+		maxRowScroll := currentMaxLines - viewHeight
+		if maxRowScroll < 0 {
+			maxRowScroll = 0
+		}
+
 		switch event.Key() {
 		case tcell.KeyLeft:
-			if col >= 4 {
-				diffView.ScrollTo(row, col-4)
-			} else {
-				diffView.ScrollTo(row, 0)
+			col -= 4
+			if col < 0 {
+				col = 0
 			}
+			diffView.ScrollTo(row, col)
 			return nil
 		case tcell.KeyRight:
-			diffView.ScrollTo(row, col+4)
+			col += 4
+			if col > maxColScroll {
+				col = maxColScroll
+			}
+			diffView.ScrollTo(row, col)
 			return nil
 		case tcell.KeyUp:
-			if row >= 3 {
-				diffView.ScrollTo(row-3, col)
-			} else {
-				diffView.ScrollTo(0, col)
+			row -= 3
+			if row < 0 {
+				row = 0
 			}
+			diffView.ScrollTo(row, col)
 			return nil
 		case tcell.KeyDown:
-			diffView.ScrollTo(row+3, col)
+			row += 3
+			if row > maxRowScroll {
+				row = maxRowScroll
+			}
+			diffView.ScrollTo(row, col)
 			return nil
 		}
 
 		switch event.Rune() {
 		case 'j':
-			diffView.ScrollTo(row+3, col)
+			row += 3
+			if row > maxRowScroll {
+				row = maxRowScroll
+			}
+			diffView.ScrollTo(row, col)
 			return nil
 		case 'k':
-			if row >= 3 {
-				diffView.ScrollTo(row-3, col)
-			} else {
-				diffView.ScrollTo(0, col)
+			row -= 3
+			if row < 0 {
+				row = 0
 			}
+			diffView.ScrollTo(row, col)
 			return nil
 		case 'h':
-			if col >= 4 {
-				diffView.ScrollTo(row, col-4)
-			} else {
-				diffView.ScrollTo(row, 0)
+			col -= 4
+			if col < 0 {
+				col = 0
 			}
+			diffView.ScrollTo(row, col)
 			return nil
 		case 'l':
-			diffView.ScrollTo(row, col+4)
+			col += 4
+			if col > maxColScroll {
+				col = maxColScroll
+			}
+			diffView.ScrollTo(row, col)
 			return nil
 		}
 		return event
 	})
 
-	// Mouse Capture on diffView for horizontal & vertical scroll
+	// Clamped Mouse Scrolling
 	diffView.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
 		row, col := diffView.GetScrollOffset()
+		_, _, viewWidth, viewHeight := diffView.GetInnerRect()
+
+		maxColScroll := currentMaxCols - viewWidth
+		if maxColScroll < 0 {
+			maxColScroll = 0
+		}
+		maxRowScroll := currentMaxLines - viewHeight
+		if maxRowScroll < 0 {
+			maxRowScroll = 0
+		}
+
 		switch action {
 		case tview.MouseScrollLeft:
-			if col >= 4 {
-				diffView.ScrollTo(row, col-4)
-			} else {
-				diffView.ScrollTo(row, 0)
+			col -= 4
+			if col < 0 {
+				col = 0
 			}
+			diffView.ScrollTo(row, col)
 			return action, nil
 		case tview.MouseScrollRight:
-			diffView.ScrollTo(row, col+4)
+			col += 4
+			if col > maxColScroll {
+				col = maxColScroll
+			}
+			diffView.ScrollTo(row, col)
 			return action, nil
 		case tview.MouseScrollUp:
-			if row >= 3 {
-				diffView.ScrollTo(row-3, col)
-			} else {
-				diffView.ScrollTo(0, col)
+			row -= 3
+			if row < 0 {
+				row = 0
 			}
+			diffView.ScrollTo(row, col)
 			return action, nil
 		case tview.MouseScrollDown:
-			diffView.ScrollTo(row+3, col)
+			row += 3
+			if row > maxRowScroll {
+				row = maxRowScroll
+			}
+			diffView.ScrollTo(row, col)
 			return action, nil
 		}
 		return action, event
 	})
 
-	// 4. Bottom Bar
+	// Bottom Bar
 	bottomBar.SetDynamicColors(true)
 	renderBottomBar := func(statusMsg string) {
-		baseHelp := " [gray][[yellow::b]j/k/↑/↓[gray::-]][white] Select Turn  [gray]•[white]  [gray][[yellow::b]Tab[gray::-]][white] Switch Pane  [gray]•[white]  [gray][[yellow::b]h/l/←/→[gray::-]][white] Scroll Diff  [gray]•[white]  [gray][[yellow::b]r[gray::-]][white] Revert Workspace  [gray]•[white]  [gray][[yellow::b]q/Esc[gray::-]][white] Quit"
+		baseHelp := " [gray][[yellow::b]j/k/↑/↓[gray::-]][white] Select Turn  [gray]•[white]  [gray][[yellow::b]Tab[gray::-]][white] Switch Pane  [gray]•[white]  [gray][[yellow::b]h/l/←/→[gray::-]][white] Scroll Diff  [gray]•[white]  [gray][[yellow::b]r[gray::-]][white] Revert  [gray]•[white]  [gray][[yellow::b]q/Esc[gray::-]][white] Quit"
 		if statusMsg != "" {
 			bottomBar.SetText(fmt.Sprintf(" %s  [gray]•[white]%s", statusMsg, baseHelp))
 		} else {
@@ -253,19 +305,16 @@ func Launch() error {
 	}
 	renderBottomBar("")
 
-	// Main Split: Left gets 2 units (40%), Right gets 3 units (60%)
 	mainSplit := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
 		AddItem(turnList, 0, 2, true).
 		AddItem(diffView, 0, 3, false)
 
-	// Root Flex
 	rootFlex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(mainSplit, 0, 1, true).
 		AddItem(bottomBar, 1, 0, false)
 
-	// Focus Management
 	updateFocusColors := func() {
 		if app.GetFocus() == turnList {
 			turnList.SetBorderColor(tcell.ColorAqua)
@@ -276,7 +325,6 @@ func Launch() error {
 		}
 	}
 
-	// Global Keyboard Input Capture
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		key := event.Key()
 		runeChar := event.Rune()
@@ -313,12 +361,7 @@ func Launch() error {
 					renderBottomBar(fmt.Sprintf("[red]✘ Error: %v[-]", err))
 				} else {
 					safeSHA := getSafeSHA(sha)
-					renderBottomBar(
-						fmt.Sprintf(
-							"[green]✔ Workspace reverted to Turn %d (%s)[-]",
-							selectedTurn.Turn, safeSHA,
-						),
-					)
+					renderBottomBar(fmt.Sprintf("[green]✔ Workspace reverted to Turn %d (%s)[-]", selectedTurn.Turn, safeSHA))
 					updateDiffForTurn(selectedTurn)
 				}
 			}
