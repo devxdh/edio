@@ -24,7 +24,7 @@ polluting your staging index or git commit history.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fi, err := os.Stdout.Stat()
 		if err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
-			return runTUI()
+			return runUI()
 		}
 		return cmd.Help()
 	},

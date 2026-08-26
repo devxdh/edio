@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Publish Release
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          # Linux
+          - goos: linux
+            goarch: amd64
+            output_name: edio-linux-amd64
+            archive_name: edio-linux-amd64.tar.gz
+          - goos: linux
+            goarch: arm64
+            output_name: edio-linux-arm64
+            archive_name: edio-linux-arm64.tar.gz
+          # macOS
+          - goos: darwin
+            goarch: amd64
+            output_name: edio-darwin-amd64
+            archive_name: edio-darwin-amd64.tar.gz
+          - goos: darwin
+            goarch: arm64
+            output_name: edio-darwin-arm64
+            archive_name: edio-darwin-arm64.tar.gz
+          # Windows
+          - goos: windows
+            goarch: amd64
+            output_name: edio-windows-amd64.exe
+            archive_name: edio-windows-amd64.zip
+          - goos: windows
+            goarch: arm64
+            output_name: edio-windows-arm64.exe
+            archive_name: edio-windows-arm64.zip
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Compile Binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/${{ matrix.output_name }} ./cmd/edio
+
+      - name: Package Archive (Unix)
+        if: matrix.goos != 'windows'
+        run: |
+          cd dist
+          tar -czf ${{ matrix.archive_name }} ${{ matrix.output_name }}
+          sha256sum ${{ matrix.archive_name }} > ${{ matrix.archive_name }}.sha256
+
+      - name: Package Archive (Windows)
+        if: matrix.goos == 'windows'
+        run: |
+          cd dist
+          zip ${{ matrix.archive_name }} ${{ matrix.output_name }}
+          sha256sum ${{ matrix.archive_name }} > ${{ matrix.archive_name }}.sha256
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/${{ matrix.archive_name }}
+            dist/${{ matrix.archive_name }}.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
