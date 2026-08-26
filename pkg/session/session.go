@@ -21,10 +21,13 @@ import (
 //   - TurnCount: Number of recorded snapshots within this session.
 //   - LatestSHA: The 40-character commit SHA of the most recent turn.
 //     Used as the parent commit SHA when recording the next turn.
+//   - BaseCommitSHA: The commit SHA of HEAD when the session was created.
+//     Used to compute Turn 1 diffs against the starting repository state.
 type Session struct {
-	ID        string `json:"id"`
-	TurnCount int    `json:"turn_count"`
-	LatestSHA string `json:"latest_sha"`
+	ID            string `json:"id"`
+	TurnCount     int    `json:"turn_count"`
+	LatestSHA     string `json:"latest_sha"`
+	BaseCommitSHA string `json:"base_commit_sha,omitempty"`
 }
 
 // GenerateID produces a unique session identifier by combining the current
@@ -38,12 +41,17 @@ func GenerateID() string {
 }
 
 // NewSession initializes an empty in-memory Session with a new ID,
-// a TurnCount of 0, and no parent commit.
+// a TurnCount of 0, no parent commit, and captures current HEAD as BaseCommitSHA.
 func NewSession() *Session {
+	baseSHA := ""
+	if head, err := gitengine.GetRef("HEAD"); err == nil && head != "" {
+		baseSHA = head
+	}
 	return &Session{
-		ID:        GenerateID(),
-		TurnCount: 0,
-		LatestSHA: "",
+		ID:            GenerateID(),
+		TurnCount:     0,
+		LatestSHA:     "",
+		BaseCommitSHA: baseSHA,
 	}
 }
 

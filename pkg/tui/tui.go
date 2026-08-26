@@ -1,4 +1,3 @@
-// Package tui contains terminal user interface
 package tui
 
 import (
@@ -10,6 +9,8 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
+
+const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 // Launch initializes and runs the interactive tview TUI application.
 func Launch() error {
@@ -27,7 +28,7 @@ func Launch() error {
 		return fmt.Errorf("failed to retrieve history: %w", err)
 	}
 
-	// Palette configuration
+	// 1. Configure Theme Palette
 	darkGreyBG := tcell.NewHexColor(0x161b22)
 	panelGreyBG := tcell.NewHexColor(0x1c2128)
 	borderGrey := tcell.NewHexColor(0x30363d)
@@ -44,14 +45,16 @@ func Launch() error {
 
 	// Components
 	turnList := tview.NewList()
+	diffHeader := tview.NewTextView()
 	diffView := tview.NewTextView()
 	bottomBar := tview.NewTextView()
 
 	turnList.SetBackgroundColor(darkGreyBG)
+	diffHeader.SetBackgroundColor(panelGreyBG)
 	diffView.SetBackgroundColor(darkGreyBG)
 	bottomBar.SetBackgroundColor(panelGreyBG)
 
-	// Left Pane: Turn Timeline
+	// 2. Left Pane: Turn Timeline
 	turnList.SetBorder(true).
 		SetTitle("[::b]Turn Timeline[::-]").
 		SetBorderColor(tcell.ColorAqua)
@@ -61,6 +64,7 @@ func Launch() error {
 		SetSelectedBackgroundColor(tcell.NewHexColor(0x21262d)).
 		SetSelectedTextColor(tcell.ColorWhite)
 
+	// Keyboard Input Capture on turnList
 	turnList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		cur := turnList.GetCurrentItem()
 		total := turnList.GetItemCount()
@@ -80,6 +84,26 @@ func Launch() error {
 		return event
 	})
 
+	// Mouse Capture on turnList
+	turnList.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
+		cur := turnList.GetCurrentItem()
+		total := turnList.GetItemCount()
+
+		switch action {
+		case tview.MouseScrollUp:
+			if cur > 0 {
+				turnList.SetCurrentItem(cur - 1)
+			}
+			return action, nil
+		case tview.MouseScrollDown:
+			if cur < total-1 {
+				turnList.SetCurrentItem(cur + 1)
+			}
+			return action, nil
+		}
+		return action, event
+	})
+
 	// Reverse Chronological Order
 	revHistory := make([]session.TurnRecord, len(history))
 	for i, turn := range history {
@@ -97,7 +121,19 @@ func Launch() error {
 		return "-------"
 	}
 
-	// Bounding limits for diff viewport
+	// 3. Right Pane: Header & Diff Viewport
+	diffHeader.SetDynamicColors(true).
+		SetWrap(true).
+		SetBorder(true).
+		SetBorderColor(borderGrey)
+
+	diffView.SetBorder(true).
+		SetBorderColor(borderGrey)
+
+	diffView.SetDynamicColors(true).
+		SetScrollable(true).
+		SetWrap(false)
+
 	currentMaxLines := 0
 	currentMaxCols := 0
 
@@ -105,13 +141,24 @@ func Launch() error {
 		ref := sess.ActiveRef(record.Turn)
 		sha, _ := gitengine.GetRef(ref)
 
-		parentSHA := "HEAD"
-		if record.Turn > 1 {
+		parentSHA := emptyTreeSHA
+		if record.Turn == 1 {
+			if sess.BaseCommitSHA != "" {
+				parentSHA = sess.BaseCommitSHA
+			}
+		} else {
 			parentRef := sess.ActiveRef(record.Turn - 1)
 			pSHA, err := gitengine.GetRef(parentRef)
 			if err == nil && pSHA != "" {
 				parentSHA = pSHA
 			}
+		}
+
+		// Calculate churn stats
+		churnText := ""
+		diffStat, err := gitengine.RunGit("diff", "--shortstat", parentSHA, sha)
+		if err == nil && strings.TrimSpace(diffStat) != "" {
+			churnText = fmt.Sprintf("[gray](%s)[-]", strings.TrimSpace(diffStat))
 		}
 
 		rawDiff, err := gitengine.RunGit("diff", parentSHA, sha)
@@ -121,17 +168,24 @@ func Launch() error {
 
 		shaDisplay := getSafeSHA(sha)
 		fullMsg := strings.TrimSpace(record.Message)
-		diffView.SetTitle(fmt.Sprintf(" [::b]Turn %d: %s - %s[::-] ", record.Turn, shaDisplay, tview.Escape(fullMsg)))
+		if fullMsg == "" {
+			fullMsg = "turn snapshot"
+		}
+
+		// Render multi-line formatted metadata header with guaranteed zero truncation
+		diffHeader.SetTitle(fmt.Sprintf(" [::b]Turn %d: %s[::-] ", record.Turn, shaDisplay))
+		diffHeader.SetText(fmt.Sprintf(" [white::b]%s[-]  %s", tview.Escape(fullMsg), churnText))
 
 		formattedText, numLines, maxLineLen := FormatDiff(rawDiff)
 		currentMaxLines = numLines
 		currentMaxCols = maxLineLen
 
+		diffView.SetTitle(fmt.Sprintf(" [::b]Changes vs Parent (%s)[::-] ", getSafeSHA(parentSHA)))
 		diffView.SetText(formattedText)
 		diffView.ScrollToBeginning()
 	}
 
-	// Populate Left Pane
+	// Populate Timeline List
 	for _, turn := range revHistory {
 		record := turn
 		ref := sess.ActiveRef(record.Turn)
@@ -151,6 +205,7 @@ func Launch() error {
 	if len(revHistory) > 0 {
 		updateDiffForTurn(revHistory[0])
 	} else {
+		diffHeader.SetText("  [gray]No active turns[-]")
 		diffView.SetText("\n  [gray]No turns recorded in active session.[-]")
 	}
 
@@ -160,16 +215,7 @@ func Launch() error {
 		}
 	})
 
-	// Right Pane: Diff Viewport
-	diffView.SetBorder(true).
-		SetTitle("[::b]Diff (Turn Timeline vs Working Tree)[::-]").
-		SetBorderColor(borderGrey)
-
-	diffView.SetDynamicColors(true).
-		SetScrollable(true).
-		SetWrap(false)
-
-	// Clamped Keyboard Scrolling
+	// Diff Viewport Keyboard Scrolling
 	diffView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		row, col := diffView.GetScrollOffset()
 		_, _, viewWidth, viewHeight := diffView.GetInnerRect()
@@ -247,7 +293,7 @@ func Launch() error {
 		return event
 	})
 
-	// Clamped Mouse Scrolling
+	// Diff Viewport Mouse Scrolling
 	diffView.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
 		row, col := diffView.GetScrollOffset()
 		_, _, viewWidth, viewHeight := diffView.GetInnerRect()
@@ -294,23 +340,31 @@ func Launch() error {
 		return action, event
 	})
 
-	// Bottom Bar
+	// 4. Bottom Bar
 	bottomBar.SetDynamicColors(true)
 	renderBottomBar := func(statusMsg string) {
-		baseHelp := " [gray][[yellow::b]j/k/↑/↓[gray::-]][white] Select Turn  [gray]•[white]  [gray][[yellow::b]Tab[gray::-]][white] Switch Pane  [gray]•[white]  [gray][[yellow::b]h/l/←/→[gray::-]][white] Scroll Diff  [gray]•[white]  [gray][[yellow::b]r[gray::-]][white] Revert  [gray]•[white]  [gray][[yellow::b]q/Esc[gray::-]][white] Quit"
+		baseHelp := " [white][[yellow::b]j/k/↑/↓[white::-]][white] Select Turn  [white]•[white]  [white][[yellow::b]Tab[white::-]][white] Switch Pane  [white]•[white]  [white][[yellow::b]h/l/←/→[white::-]][white] Scroll Diff  [white]•[white]  [white][[yellow::b]r[white::-]][white] Revert Workspace  [white]•[white]  [white][[yellow::b]q/Esc[white::-]][white] Quit"
 		if statusMsg != "" {
-			bottomBar.SetText(fmt.Sprintf(" %s  [gray]•[white]%s", statusMsg, baseHelp))
+			bottomBar.SetText(fmt.Sprintf(" %s  [white]•[white]%s", statusMsg, baseHelp))
 		} else {
 			bottomBar.SetText(baseHelp)
 		}
 	}
 	renderBottomBar("")
 
+	// Right Pane Layout: Multi-line Header (3 lines) + Diff View (remainder)
+	rightPaneFlex := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(diffHeader, 3, 0, false).
+		AddItem(diffView, 0, 1, false)
+
+	// Main Horizontal Split (35% Timeline, 65% Diff View)
 	mainSplit := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
-		AddItem(turnList, 0, 2, true).
-		AddItem(diffView, 0, 3, false)
+		AddItem(turnList, 0, 1, true).
+		AddItem(rightPaneFlex, 0, 2, false)
 
+	// Root Flex
 	rootFlex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(mainSplit, 0, 1, true).
@@ -320,9 +374,11 @@ func Launch() error {
 		if app.GetFocus() == turnList {
 			turnList.SetBorderColor(tcell.ColorAqua)
 			diffView.SetBorderColor(borderGrey)
+			diffHeader.SetBorderColor(borderGrey)
 		} else {
 			turnList.SetBorderColor(borderGrey)
 			diffView.SetBorderColor(tcell.ColorAqua)
+			diffHeader.SetBorderColor(tcell.ColorAqua)
 		}
 	}
 

@@ -12,7 +12,10 @@ import (
 	"github.com/rivo/tview"
 )
 
-const targetFullLineWidth = 240
+const (
+	minDiffLineWidth = 200
+	maxDiffLength    = 200000
+)
 
 var (
 	chromaStyle = styles.Get("github-dark")
@@ -52,7 +55,7 @@ func highlightTokensToTview(lexer chroma.Lexer, codeText, bgHex string) (string,
 		escapedVal := tview.Escape(val)
 
 		entry := chromaStyle.Get(token.Type)
-		colorHex := "#c9d1d9"
+		colorHex := "#c9d1d9" // GitHub Dark default text color
 		if entry.Colour.IsSet() {
 			colorHex = entry.Colour.String()
 		}
@@ -67,14 +70,31 @@ func highlightTokensToTview(lexer chroma.Lexer, codeText, bgHex string) (string,
 	return sb.String(), visibleLen
 }
 
-// FormatDiff cleans raw git diff output and enforces full-width edge-to-edge line backgrounds.
+// FormatDiff cleans raw git diff output into GitHub/Delta style with line numbers,
+// synchronized gutters, full-line background tints, and syntax-highlighted tokens.
 func FormatDiff(rawDiff string) (string, int, int) {
-	if strings.TrimSpace(rawDiff) == "" {
+	cleanDiff := strings.TrimSpace(rawDiff)
+	if cleanDiff == "" {
 		return "\n  [#8b949e]No modifications between this turn and current workspace.[-]", 1, 60
 	}
 
-	lines := strings.Split(rawDiff, "\n")
+	// 1. Binary file detection guardrail
+	if strings.Contains(cleanDiff, "Binary files") || strings.Contains(cleanDiff, "GIT binary patch") {
+		return "\n  [#e3b341]⚡ Binary file changes detected.[-]", 1, 60
+	}
+
+	// 2. Large payload freeze guardrail (> 200KB)
+	warningHeader := ""
+	if len(cleanDiff) > maxDiffLength {
+		warningHeader = "\n  [red]⚠️ Diff payload exceeds 200KB. Truncated for performance.[-]\n"
+		cleanDiff = cleanDiff[:maxDiffLength]
+	}
+
+	lines := strings.Split(cleanDiff, "\n")
 	var formattedLines []string
+	if warningHeader != "" {
+		formattedLines = append(formattedLines, warningHeader)
+	}
 
 	currentLexer := lexers.Get("go")
 	if currentLexer == nil {
@@ -83,7 +103,17 @@ func FormatDiff(rawDiff string) (string, int, int) {
 
 	oldLine := 0
 	newLine := 0
-	maxLineLen := targetFullLineWidth
+	maxLineLen := minDiffLineWidth
+
+	// First pass: Precompute maximum line length for full-bleed background padding
+	for _, line := range lines {
+		if strings.HasPrefix(line, "+") || strings.HasPrefix(line, "-") || strings.HasPrefix(line, " ") {
+			rawLen := 12 + len(line)
+			if rawLen > maxLineLen {
+				maxLineLen = rawLen
+			}
+		}
+	}
 
 	for _, line := range lines {
 		// 1. Drop Git Plumbing lines
@@ -95,8 +125,10 @@ func FormatDiff(rawDiff string) (string, int, int) {
 			continue
 		}
 
-		// 2. Discard raw file header markers
-		if strings.HasPrefix(line, "--- a/") || strings.HasPrefix(line, "--- /dev/null") || strings.HasPrefix(line, "+++ /dev/null") {
+		// 2. Discard unwanted file header markers
+		if strings.HasPrefix(line, "--- a/") ||
+			strings.HasPrefix(line, "--- /dev/null") ||
+			strings.HasPrefix(line, "+++ /dev/null") {
 			continue
 		}
 
@@ -110,7 +142,7 @@ func FormatDiff(rawDiff string) (string, int, int) {
 				currentLexer = lexers.Fallback
 			}
 
-			header := fmt.Sprintf("\n[aqua::b] ▾ %s[-::-]\n[#30363d]%s[-]", filePath, strings.Repeat("─", 70))
+			header := fmt.Sprintf("\n[aqua::b] ▾ %s[-::-]\n[#30363d]%s[-]", filePath, strings.Repeat("─", 65))
 			formattedLines = append(formattedLines, header)
 			continue
 		}
@@ -123,13 +155,16 @@ func FormatDiff(rawDiff string) (string, int, int) {
 				newLine, _ = strconv.Atoi(matches[2])
 				ctxText := strings.TrimSpace(matches[3])
 				if ctxText != "" {
-					formattedLines = append(formattedLines, fmt.Sprintf("          [#8b949e::d]%s[-::-]", tview.Escape(ctxText)))
+					formattedLines = append(
+						formattedLines,
+						fmt.Sprintf("            [#8b949e::d]%s[-::-]", tview.Escape(ctxText)),
+					)
 				}
 			}
 			continue
 		}
 
-		// 5. Code Additions (+): Full-width green background
+		// 5. Code Additions (+): Strict 12-char gutter aligned with context lines
 		if strings.HasPrefix(line, "+") {
 			codeText := strings.TrimPrefix(line, "+")
 			gutter := fmt.Sprintf("     %4d + ", newLine)
@@ -137,17 +172,18 @@ func FormatDiff(rawDiff string) (string, int, int) {
 
 			highlighted, vLen := highlightTokensToTview(currentLexer, codeText, "#16331c")
 			totalVisLen := len(gutter) + vLen
-			paddingSpaces := ""
-			if totalVisLen < targetFullLineWidth {
-				paddingSpaces = strings.Repeat(" ", targetFullLineWidth-totalVisLen)
+			padding := ""
+			if totalVisLen < maxLineLen {
+				padding = strings.Repeat(" ", maxLineLen-totalVisLen)
 			}
-
-			// Format: Background applied to gutter, syntax tokens, and all padding spaces
-			formattedLines = append(formattedLines, fmt.Sprintf("[:#16331c][#50fa7b]%s[:-]%s[:#16331c]%s[-:-]", gutter, highlighted, paddingSpaces))
+			formattedLines = append(
+				formattedLines,
+				fmt.Sprintf("[:#16331c][#50fa7b]%s[:-]%s[:#16331c]%s[-:-]", gutter, highlighted, padding),
+			)
 			continue
 		}
 
-		// 6. Code Deletions (-): Full-width red background
+		// 6. Code Deletions (-): Strict 12-char gutter aligned with context lines
 		if strings.HasPrefix(line, "-") {
 			codeText := strings.TrimPrefix(line, "-")
 			gutter := fmt.Sprintf("%4d      - ", oldLine)
@@ -155,20 +191,18 @@ func FormatDiff(rawDiff string) (string, int, int) {
 
 			highlighted, vLen := highlightTokensToTview(currentLexer, codeText, "#3d1a11")
 			totalVisLen := len(gutter) + vLen
-			paddingSpaces := ""
-			if totalVisLen < targetFullLineWidth {
-				paddingSpaces = strings.Repeat(" ", targetFullLineWidth-totalVisLen)
+			padding := ""
+			if totalVisLen < maxLineLen {
+				padding = strings.Repeat(" ", maxLineLen-totalVisLen)
 			}
-
-			// Format: Background applied to gutter, syntax tokens, and all padding spaces
 			formattedLines = append(
 				formattedLines,
-				fmt.Sprintf("[:#3d1a11][#ff5555]%s[:-]%s[:#3d1a11]%s[-:-]", gutter, highlighted, paddingSpaces),
+				fmt.Sprintf("[:#3d1a11][#ff5555]%s[:-]%s[:#3d1a11]%s[-:-]", gutter, highlighted, padding),
 			)
 			continue
 		}
 
-		// 7. Unchanged Context Lines
+		// 7. Unchanged Context Lines: Exact 12-char gutter
 		if strings.HasPrefix(line, " ") {
 			codeText := strings.TrimPrefix(line, " ")
 			gutter := fmt.Sprintf("[#6e7681]%4d %4d   [-]", oldLine, newLine)
@@ -182,7 +216,7 @@ func FormatDiff(rawDiff string) (string, int, int) {
 
 		if line != "" {
 			escaped := tview.Escape(line)
-			formattedLines = append(formattedLines, fmt.Sprintf("          [#c9d1d9]%s[-]", escaped))
+			formattedLines = append(formattedLines, fmt.Sprintf("            [#c9d1d9]%s[-]", escaped))
 		}
 	}
 
