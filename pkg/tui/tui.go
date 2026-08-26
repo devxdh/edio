@@ -11,29 +11,6 @@ import (
 	"github.com/rivo/tview"
 )
 
-// wrapWords splits long text strings into multi-line chunks of maximum maxLen characters.
-func wrapWords(text string, maxLen int) string {
-	if maxLen <= 10 {
-		maxLen = 30
-	}
-	words := strings.Fields(text)
-	if len(words) == 0 {
-		return ""
-	}
-	var lines []string
-	cur := words[0]
-	for _, w := range words[1:] {
-		if len(cur)+1+len(w) <= maxLen {
-			cur += " " + w
-		} else {
-			lines = append(lines, cur)
-			cur = w
-		}
-	}
-	lines = append(lines, cur)
-	return strings.Join(lines, "\n  ")
-}
-
 // Launch initializes and runs the interactive tview TUI application.
 func Launch() error {
 	if err := gitengine.EnsureGitRepo(); err != nil {
@@ -50,7 +27,7 @@ func Launch() error {
 		return fmt.Errorf("failed to retrieve history: %w", err)
 	}
 
-	// Configure GitHub Dark Dimmed Palette (#161b22 / #1c2128 / #30363d)
+	// 1. Configure Dark Grey / Slate Palette
 	darkGreyBG := tcell.NewHexColor(0x161b22)
 	panelGreyBG := tcell.NewHexColor(0x1c2128)
 	borderGrey := tcell.NewHexColor(0x30363d)
@@ -74,7 +51,7 @@ func Launch() error {
 	diffView.SetBackgroundColor(darkGreyBG)
 	bottomBar.SetBackgroundColor(panelGreyBG)
 
-	// Left Pane: Turn Timeline (tview.List)
+	// 2. Left Pane: Turn Timeline
 	turnList.SetBorder(true).
 		SetTitle("[::b]Turn Timeline[::-]").
 		SetBorderColor(tcell.ColorAqua)
@@ -110,7 +87,7 @@ func Launch() error {
 		revHistory[len(history)-1-i] = turn
 	}
 
-	// Helper function to format SHA safely
+	// Safe SHA retrieval
 	getSafeSHA := func(rawSHA string) string {
 		clean := strings.TrimSpace(rawSHA)
 		if len(clean) >= 7 {
@@ -142,38 +119,29 @@ func Launch() error {
 		}
 
 		shaDisplay := getSafeSHA(sha)
-		diffView.SetTitle(fmt.Sprintf("[::b]Diff (Turn %d: %s vs Workspace)[::-]", record.Turn, shaDisplay))
+		// Display full commit message and SHA in the header
+		fullMsg := strings.TrimSpace(record.Message)
+		diffView.SetTitle(fmt.Sprintf(" [::b]Turn %d: %s - %s[::-] ", record.Turn, shaDisplay, tview.Escape(fullMsg)))
 		diffView.SetText(FormatDiff(rawDiff))
 		diffView.ScrollToBeginning()
 	}
 
+	// Populate Left Pane List with Escaped Brackets
 	for _, turn := range revHistory {
 		record := turn
 		ref := sess.ActiveRef(record.Turn)
 		sha, _ := gitengine.GetRef(ref)
 		shaDisplay := getSafeSHA(sha)
-		mainText := fmt.Sprintf("● Turn %-2d [%s]", record.Turn, shaDisplay)
 
-		// Get churn stats for turn
-		parentSHA := "HEAD"
-		if record.Turn > 1 {
-			parentRef := sess.ActiveRef(record.Turn - 1)
-			pSHA, _ := gitengine.GetRef(parentRef)
-			if pSHA != "" {
-				parentSHA = pSHA
-			}
+		// ESCAPE the brackets so tview doesn't parse the SHA as a color tag
+		mainText := fmt.Sprintf("● Turn %-2d [gray][[-][aqua]%s[gray]][-]", record.Turn, shaDisplay)
+
+		// Clean message
+		msg := strings.TrimSpace(record.Message)
+		if msg == "" {
+			msg = "turn snapshot"
 		}
-
-		churnText := ""
-		diffStat, err := gitengine.RunGit("diff", "--shortstat", parentSHA, sha)
-		if err == nil && strings.TrimSpace(diffStat) != "" {
-			churnText = " (" + strings.TrimSpace(diffStat) + ")"
-		}
-
-		// Multi-line word wrapping for complete message legibility
-		rawMsg := strings.TrimSpace(record.Message)
-		wrappedDesc := wrapWords(rawMsg+churnText, 32)
-		secText := fmt.Sprintf("  %s\n", wrappedDesc)
+		secText := fmt.Sprintf("  %s", tview.Escape(msg))
 
 		turnList.AddItem(mainText, secText, 0, nil)
 	}
@@ -191,7 +159,7 @@ func Launch() error {
 		}
 	})
 
-	// Right Pane: Diff Viewport (tview.TextView)
+	// 3. Right Pane: Diff Viewport
 	diffView.SetBorder(true).
 		SetTitle("[::b]Diff (Turn Timeline vs Working Tree)[::-]").
 		SetBorderColor(borderGrey)
@@ -218,31 +186,31 @@ func Launch() error {
 		return event
 	})
 
-	// Bottom Bar (tview.TextView) with Escaped [[R]] Brackets
+	// 4. Bottom Bar: Escaped Keys
 	bottomBar.SetDynamicColors(true)
 	renderBottomBar := func(statusMsg string) {
-		baseHelp := " [aqua::b][[j/k/↑/↓]][-::-] Select Turn  •  [aqua::b][[Tab/h/l]][-::-] Switch Pane  •  [aqua::b][[r]][-::-] Revert Workspace  •  [aqua::b][[q/Esc]][-::-] Quit"
+		baseHelp := " [gray][[yellow::b]j/k/↑/↓[gray::-]][white] Select Turn  [gray]•[white]  [gray][[yellow::b]Tab/h/l[gray::-]][white] Switch Pane  [gray]•[white]  [gray][[yellow::b]r[gray::-]][white] Revert Workspace  [gray]•[white]  [gray][[yellow::b]q/Esc[gray::-]][white] Quit"
 		if statusMsg != "" {
-			bottomBar.SetText(fmt.Sprintf("%s  •  %s", statusMsg, baseHelp))
+			bottomBar.SetText(fmt.Sprintf(" %s  [gray]•[white]%s", statusMsg, baseHelp))
 		} else {
 			bottomBar.SetText(baseHelp)
 		}
 	}
 	renderBottomBar("")
 
-	// Main Split Flex (Row 1)
+	// Main Split Flex: Left gets 2 units (40%), Right gets 3 units (60%) for wider message display
 	mainSplit := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
-		AddItem(turnList, 0, 1, true).
-		AddItem(diffView, 0, 2, false)
+		AddItem(turnList, 0, 2, true).
+		AddItem(diffView, 0, 3, false)
 
-	// Root Flex (Vertical: Main Split + Bottom Bar)
+	// Root Flex
 	rootFlex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(mainSplit, 0, 1, true).
 		AddItem(bottomBar, 1, 0, false)
 
-	// Focus Management & Border Color Updates
+	// Focus Management
 	updateFocusColors := func() {
 		if app.GetFocus() == turnList {
 			turnList.SetBorderColor(tcell.ColorAqua)
@@ -253,7 +221,7 @@ func Launch() error {
 		}
 	}
 
-	// Global Keyboard Input Capture (ONLY Tab, r, and q/Esc to avoid hijacking widget keys)
+	// Global Keyboard Input Capture
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		key := event.Key()
 		runeChar := event.Rune()
@@ -300,12 +268,10 @@ func Launch() error {
 					renderBottomBar(fmt.Sprintf("[red]✘ Error: %v[-]", err))
 				} else {
 					safeSHA := getSafeSHA(sha)
-					renderBottomBar(
-						fmt.Sprintf(
-							"[green]✔ Workspace reverted to Turn %d (%s)[-]",
-							selectedTurn.Turn, safeSHA,
-						),
-					)
+					renderBottomBar(fmt.Sprintf(
+						"[green]✔ Workspace reverted to Turn %d (%s)[-]",
+						selectedTurn.Turn, safeSHA,
+					))
 					updateDiffForTurn(selectedTurn)
 				}
 			}
