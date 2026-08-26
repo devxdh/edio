@@ -1,6 +1,6 @@
 module github.com/devxdh/edio
 
-go 1.26.6
+go 1.25
 
 require (
 	github.com/alecthomas/chroma/v2 v2.27.0
