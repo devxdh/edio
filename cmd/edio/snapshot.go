@@ -5,6 +5,7 @@ import (
 
 	"github.com/devxdh/edio/pkg/gitengine"
 	"github.com/devxdh/edio/pkg/session"
+	"github.com/devxdh/edio/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -45,13 +46,11 @@ and creates a shadow turn commit linked into the active session DAG.`,
 			return fmt.Errorf("failed to persist session: %w", err)
 		}
 
-		// Short SHA display for terminal output
-		shortSHA := commitSHA
-		if len(commitSHA) >= 7 {
-			shortSHA = commitSHA[:7]
+		if snapshotMsg != "" {
+			fmt.Printf("%s %s snapshot recorded: %s\n", ui.TurnBadge(sess.TurnCount), ui.SHABadge(commitSHA), snapshotMsg)
+		} else {
+			fmt.Printf("%s %s snapshot recorded\n", ui.TurnBadge(sess.TurnCount), ui.SHABadge(commitSHA))
 		}
-
-		fmt.Printf("● [Turn %d] snapshot recorded (%s)\n", sess.TurnCount, shortSHA)
 		return nil
 	},
 }

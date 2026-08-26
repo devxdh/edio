@@ -5,6 +5,7 @@ import (
 
 	"github.com/devxdh/edio/pkg/gitengine"
 	"github.com/devxdh/edio/pkg/session"
+	"github.com/devxdh/edio/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -27,17 +28,13 @@ var logCmd = &cobra.Command{
 		}
 
 		if len(history) == 0 {
-			fmt.Println("No turns recorded in the active session.")
+			fmt.Println("No turns recorded in active session.")
 			return nil
 		}
 
-		fmt.Printf("Session: %s (%d turns recorded)\n\n", sess.ID, sess.TurnCount)
+		fmt.Printf("Session %s (%d turns)\n\n", ui.Bold(sess.ID), sess.TurnCount)
 		for _, record := range history {
-			shortSHA := record.SHA
-			if len(shortSHA) >= 7 {
-				shortSHA = shortSHA[:7]
-			}
-			fmt.Printf("  ● Turn %-2d  [%s]  %s\n", record.Turn, shortSHA, record.Message)
+			fmt.Printf("* %s %s %s\n", ui.TurnBadge(record.Turn), ui.SHABadge(record.SHA), record.Message)
 		}
 		fmt.Println()
 		return nil

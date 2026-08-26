@@ -6,6 +6,7 @@ import (
 
 	"github.com/devxdh/edio/pkg/gitengine"
 	"github.com/devxdh/edio/pkg/session"
+	"github.com/devxdh/edio/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +51,7 @@ var restoreCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to restore file %s: %w", restoreFilePath, err)
 			}
-			fmt.Printf("Restored %s to state at Turn %d\n", restoreFilePath, targetTurn)
+			fmt.Printf("Restored %s from %s %s\n", ui.Bold(restoreFilePath), ui.TurnBadge(targetTurn), ui.SHABadge(targetSHA))
 			return nil
 		}
 
@@ -60,7 +61,7 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("failed to restore workspace: %w", err)
 		}
 
-		fmt.Printf("Workspace restored to Turn %d (%s)\n", targetTurn, targetSHA[:7])
+		fmt.Printf("Restored workspace to %s %s\n", ui.TurnBadge(targetTurn), ui.SHABadge(targetSHA))
 		return nil
 	},
 }

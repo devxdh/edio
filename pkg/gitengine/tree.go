@@ -26,7 +26,12 @@ func runGitWithEnv(env []string, args ...string) (string, error) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %s failed: %v, stderr: %s", strings.Join(args, " "), err, stderr.String())
+		return "", fmt.Errorf(
+			"git %s failed: %v, stderr: %s",
+			strings.Join(args, " "),
+			err,
+			stderr.String(),
+		)
 	}
 	return strings.TrimSpace(stdout.String()), nil
 }

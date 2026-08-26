@@ -5,6 +5,7 @@ import (
 
 	"github.com/devxdh/edio/pkg/gitengine"
 	"github.com/devxdh/edio/pkg/session"
+	"github.com/devxdh/edio/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -28,6 +29,8 @@ var acceptCmd = &cobra.Command{
 			return fmt.Errorf("cannot accept: active session has no recorded turns")
 		}
 
+		turnCount := sess.TurnCount
+
 		// Get the tree SHA associated with the latest turn commit
 		latestTreeSHA, err := gitengine.RunGit("rev-parse", sess.LatestSHA+"^{tree}")
 		if err != nil {
@@ -47,9 +50,10 @@ var acceptCmd = &cobra.Command{
 		}
 
 		// Advance the active branch (or HEAD) to the new commit
-		// "git merge-base" or simple update-ref HEAD updates current branch safely
+		targetBranch := "HEAD"
 		currentBranch, err := gitengine.RunGit("symbolic-ref", "--short", "HEAD")
 		if err == nil && currentBranch != "" {
+			targetBranch = currentBranch
 			branchRef := fmt.Sprintf("refs/heads/%s", currentBranch)
 			if err := gitengine.UpdateRef(branchRef, officialCommitSHA); err != nil {
 				return fmt.Errorf("failed to advance branch %s: %w", currentBranch, err)
@@ -72,12 +76,7 @@ var acceptCmd = &cobra.Command{
 			return fmt.Errorf("warning: failed to archive session: %w", err)
 		}
 
-		shortSHA := officialCommitSHA
-		if len(shortSHA) >= 7 {
-			shortSHA = shortSHA[:7]
-		}
-
-		fmt.Printf("✔ Session accepted: %d turns squashed into commit %s\n", sess.TurnCount, shortSHA)
+		fmt.Printf("%s %s %s (%s)\n", ui.BranchBadge(targetBranch), ui.SHABadge(officialCommitSHA), commitMsg, ui.Dim(fmt.Sprintf("%d turns squashed", turnCount)))
 		return nil
 	},
 }

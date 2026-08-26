@@ -18,9 +18,9 @@ const (
 	ActiveSessionFileName = "active_session.json"
 )
 
-// GetedioDir returns the absolute path to the .git/edio directory,
+// GetEdioDir returns the absolute path to the .git/edio directory,
 // creating it if it does not already exist.
-func GetedioDir() (string, error) {
+func GetEdioDir() (string, error) {
 	if err := gitengine.EnsureGitRepo(); err != nil {
 		return "", err
 	}
@@ -46,7 +46,7 @@ func GetedioDir() (string, error) {
 
 // ActiveSessionPath returns the absolute path to .git/edio/active_session.json.
 func ActiveSessionPath() (string, error) {
-	edioDir, err := GetedioDir()
+	edioDir, err := GetEdioDir()
 	if err != nil {
 		return "", err
 	}
