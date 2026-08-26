@@ -12,6 +12,8 @@ import (
 	"github.com/rivo/tview"
 )
 
+const targetFullLineWidth = 240
+
 var (
 	chromaStyle = styles.Get("github-dark")
 	hunkRegex   = regexp.MustCompile(`^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@(.*)$`)
@@ -56,17 +58,16 @@ func highlightTokensToTview(lexer chroma.Lexer, codeText, bgHex string) (string,
 		}
 
 		if bgHex != "" {
-			sb.WriteString(fmt.Sprintf("[:%s][%s]%s[-:-]", bgHex, colorHex, escapedVal))
+			fmt.Fprintf(&sb, "[:%s][%s]%s[-:-]", bgHex, colorHex, escapedVal)
 		} else {
-			sb.WriteString(fmt.Sprintf("[%s]%s[-]", colorHex, escapedVal))
+			fmt.Fprintf(&sb, "[%s]%s[-]", colorHex, escapedVal)
 		}
 	}
 
 	return sb.String(), visibleLen
 }
 
-// FormatDiff cleans raw git diff output into GitHub/Delta style with line numbers,
-// syntax highlighting, and calculates total lines and maximum line width.
+// FormatDiff cleans raw git diff output and enforces full-width edge-to-edge line backgrounds.
 func FormatDiff(rawDiff string) (string, int, int) {
 	if strings.TrimSpace(rawDiff) == "" {
 		return "\n  [#8b949e]No modifications between this turn and current workspace.[-]", 1, 60
@@ -82,7 +83,7 @@ func FormatDiff(rawDiff string) (string, int, int) {
 
 	oldLine := 0
 	newLine := 0
-	maxLineLen := 60
+	maxLineLen := targetFullLineWidth
 
 	for _, line := range lines {
 		// 1. Drop Git Plumbing lines
@@ -109,7 +110,7 @@ func FormatDiff(rawDiff string) (string, int, int) {
 				currentLexer = lexers.Fallback
 			}
 
-			header := fmt.Sprintf("\n[aqua::b] ▾ %s[-::-]\n[#30363d]%s[-]", filePath, strings.Repeat("─", 60))
+			header := fmt.Sprintf("\n[aqua::b] ▾ %s[-::-]\n[#30363d]%s[-]", filePath, strings.Repeat("─", 70))
 			formattedLines = append(formattedLines, header)
 			continue
 		}
@@ -128,35 +129,42 @@ func FormatDiff(rawDiff string) (string, int, int) {
 			continue
 		}
 
-		// 5. Code Additions (+)
+		// 5. Code Additions (+): Full-width green background
 		if strings.HasPrefix(line, "+") {
 			codeText := strings.TrimPrefix(line, "+")
 			gutter := fmt.Sprintf("     %4d + ", newLine)
 			newLine++
 
 			highlighted, vLen := highlightTokensToTview(currentLexer, codeText, "#16331c")
-			totalLen := len(gutter) + vLen
-			if totalLen > maxLineLen {
-				maxLineLen = totalLen
+			totalVisLen := len(gutter) + vLen
+			paddingSpaces := ""
+			if totalVisLen < targetFullLineWidth {
+				paddingSpaces = strings.Repeat(" ", targetFullLineWidth-totalVisLen)
 			}
 
-			formattedLines = append(formattedLines, fmt.Sprintf("[:#16331c][#50fa7b]%s[:-]%s[-:-]", gutter, highlighted))
+			// Format: Background applied to gutter, syntax tokens, and all padding spaces
+			formattedLines = append(formattedLines, fmt.Sprintf("[:#16331c][#50fa7b]%s[:-]%s[:#16331c]%s[-:-]", gutter, highlighted, paddingSpaces))
 			continue
 		}
 
-		// 6. Code Deletions (-)
+		// 6. Code Deletions (-): Full-width red background
 		if strings.HasPrefix(line, "-") {
 			codeText := strings.TrimPrefix(line, "-")
 			gutter := fmt.Sprintf("%4d      - ", oldLine)
 			oldLine++
 
 			highlighted, vLen := highlightTokensToTview(currentLexer, codeText, "#3d1a11")
-			totalLen := len(gutter) + vLen
-			if totalLen > maxLineLen {
-				maxLineLen = totalLen
+			totalVisLen := len(gutter) + vLen
+			paddingSpaces := ""
+			if totalVisLen < targetFullLineWidth {
+				paddingSpaces = strings.Repeat(" ", targetFullLineWidth-totalVisLen)
 			}
 
-			formattedLines = append(formattedLines, fmt.Sprintf("[:#3d1a11][#ff5555]%s[:-]%s[-:-]", gutter, highlighted))
+			// Format: Background applied to gutter, syntax tokens, and all padding spaces
+			formattedLines = append(
+				formattedLines,
+				fmt.Sprintf("[:#3d1a11][#ff5555]%s[:-]%s[:#3d1a11]%s[-:-]", gutter, highlighted, paddingSpaces),
+			)
 			continue
 		}
 
@@ -167,12 +175,7 @@ func FormatDiff(rawDiff string) (string, int, int) {
 			oldLine++
 			newLine++
 
-			highlighted, vLen := highlightTokensToTview(currentLexer, codeText, "")
-			totalLen := 12 + vLen
-			if totalLen > maxLineLen {
-				maxLineLen = totalLen
-			}
-
+			highlighted, _ := highlightTokensToTview(currentLexer, codeText, "")
 			formattedLines = append(formattedLines, fmt.Sprintf("%s%s", gutter, highlighted))
 			continue
 		}

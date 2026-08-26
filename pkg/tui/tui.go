@@ -1,3 +1,4 @@
+// Package tui contains terminal user interface
 package tui
 
 import (
