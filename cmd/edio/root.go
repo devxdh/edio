@@ -21,8 +21,12 @@ polluting your staging index or git commit history.`,
   edio diff 2                   View syntax-highlighted diff for Turn 2
   edio restore 2                Restore workspace to Turn 2 state
   edio accept "feat: add auth"  Squash active turns into a commit on main`,
-	Run: func(cmd *cobra.Command, args []string) {
-		_ = cmd.Help()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fi, err := os.Stdout.Stat()
+		if err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+			return runTUI()
+		}
+		return cmd.Help()
 	},
 }
 

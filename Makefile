@@ -1,4 +1,4 @@
-.PHONY: build test install clean dev demo
+.PHONY: build test install clean dev demo demo-tui
 
 build:
 	go build -o bin/edio ./cmd/edio
@@ -35,3 +35,6 @@ demo: build
 	$(CURDIR)/bin/edio restore 1 && \
 	$(CURDIR)/bin/edio accept "feat: add multi-turn feature" && \
 	rm -rf $$TEST_DIR
+
+demo-tui:
+	@./scripts/run_demo.sh
