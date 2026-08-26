@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/devxdh/igit/pkg/gitengine"
-	"github.com/devxdh/igit/pkg/session"
+	"github.com/devxdh/edio/pkg/gitengine"
+	"github.com/devxdh/edio/pkg/session"
 	"github.com/spf13/cobra"
 )
 

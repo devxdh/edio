@@ -5,10 +5,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/devxdh/igit/pkg/gitengine"
+	"github.com/devxdh/edio/pkg/gitengine"
 )
 
-// Archive moves the active session references to refs/igit/archive/
+// Archive moves the active session references to refs/edio/archive/
 // and cleans up the active session state file.
 func (s *Session) Archive() error {
 	if s == nil || s.ID == "" {
@@ -16,7 +16,7 @@ func (s *Session) Archive() error {
 	}
 
 	// Archive latest turn commit pointer
-	archiveRef := fmt.Sprintf("refs/igit/archive/%d_%s", time.Now().Unix(), s.ID)
+	archiveRef := fmt.Sprintf("refs/edio/archive/%d_%s", time.Now().Unix(), s.ID)
 	if s.LatestSHA != "" {
 		if err := gitengine.UpdateRef(archiveRef, s.LatestSHA); err != nil {
 			return fmt.Errorf("failed to write archive ref: %w", err)

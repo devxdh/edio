@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/devxdh/igit/pkg/gitengine"
-	"github.com/devxdh/igit/pkg/testutil"
+	"github.com/devxdh/edio/pkg/gitengine"
+	"github.com/devxdh/edio/pkg/testutil"
 )
 
 func TestSessionLifeCycle(t *testing.T) {
-	tmpDir := testutil.SetupTestRepo(t, "igit-session-test-*")
+	tmpDir := testutil.SetupTestRepo(t, "edio-session-test-*")
 
 	// 1. Instantiate session
 	sess := NewSession()

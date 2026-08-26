@@ -141,7 +141,7 @@ func CommitTree(treeSHA, parentSHA, message string) (string, error) {
 	}
 
 	if strings.TrimSpace(message) == "" {
-		message = "igit: turn snapshot"
+		message = "edio: turn snapshot"
 	}
 
 	args := []string{"commit-tree", treeSHA, "-m", message}
@@ -152,12 +152,12 @@ func CommitTree(treeSHA, parentSHA, message string) (string, error) {
 	return RunGit(args...)
 }
 
-// UpdateRef updates or creates a Git reference on disk (e.g. "refs/igit/active/sess_1/1").
+// UpdateRef updates or creates a Git reference on disk (e.g. "refs/edio/active/sess_1/1").
 //
 // Why this is used:
 // This writes a pointer file in .git/refs/ directly. It creates references that
 // standard Git commands (like "git branch" or "git status") will not expose to the user,
-// keeping igit's snapshot history completely isolated from normal Git usage.
+// keeping edio's snapshot history completely isolated from normal Git usage.
 func UpdateRef(refName, commitSHA string) error {
 	if strings.TrimSpace(refName) == "" {
 		return ErrEmptyRef

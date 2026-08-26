@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/devxdh/igit/pkg/gitengine"
+	"github.com/devxdh/edio/pkg/gitengine"
 )
 
 // Session represents an active or historical agent interaction sequence.
@@ -49,18 +49,18 @@ func NewSession() *Session {
 
 // ActiveRef returns the full Git reference path for a specific turn number.
 //
-// Format: "refs/igit/active/<session_id>/<turn_number>"
-// Example: "refs/igit/active/sess_1772183400_f38a9b1c/1"
+// Format: "refs/edio/active/<session_id>/<turn_number>"
+// Example: "refs/edio/active/sess_1772183400_f38a9b1c/1"
 func (s *Session) ActiveRef(turn int) string {
-	return fmt.Sprintf("refs/igit/active/%s/%d", s.ID, turn)
+	return fmt.Sprintf("refs/edio/active/%s/%d", s.ID, turn)
 }
 
 // CurrentRef returns the Git reference path pointing to the latest turn of this session.
 //
-// Format: "refs/igit/active/<session_id>/current"
+// Format: "refs/edio/active/<session_id>/current"
 // This serves as an anchor pointer to easily resolve the session's tip commit.
 func (s *Session) CurrentRef() string {
-	return fmt.Sprintf("refs/igit/active/%s/current", s.ID)
+	return fmt.Sprintf("refs/edio/active/%s/current", s.ID)
 }
 
 // RecordTurn creates a new snapshot commit from treeSHA and advances the session state.
@@ -69,8 +69,8 @@ func (s *Session) CurrentRef() string {
 //  1. Increments TurnCount (e.g. Turn 0 -> Turn 1).
 //  2. Commits treeSHA with s.LatestSHA set as its parent commit.
 //     (If TurnCount is 1, s.LatestSHA is empty, creating a root commit).
-//  3. Writes the turn reference: "refs/igit/active/<session_id>/<turn>".
-//  4. Updates the current reference: "refs/igit/active/<session_id>/current".
+//  3. Writes the turn reference: "refs/edio/active/<session_id>/<turn>".
+//  4. Updates the current reference: "refs/edio/active/<session_id>/current".
 //  5. Updates in-memory s.LatestSHA to point to the newly created commit.
 //
 // Invariants guaranteed:
@@ -98,13 +98,13 @@ func (s *Session) RecordTurn(treeSHA, message string) (string, error) {
 		return "", fmt.Errorf("failed to commit turn tree: %w", err)
 	}
 
-	// Persist the specific turn ref: refs/igit/active/<id>/<turn>
+	// Persist the specific turn ref: refs/edio/active/<id>/<turn>
 	turnRef := s.ActiveRef(nextTurn)
 	if err := gitengine.UpdateRef(turnRef, commitSHA); err != nil {
 		return "", fmt.Errorf("failed to update turn ref %s: %w", turnRef, err)
 	}
 
-	// Persist the floating head pointer: refs/igit/active/<id>/current
+	// Persist the floating head pointer: refs/edio/active/<id>/current
 	if err := gitengine.UpdateRef(s.CurrentRef(), commitSHA); err != nil {
 		return "", fmt.Errorf("failed to update current ref: %w", err)
 	}

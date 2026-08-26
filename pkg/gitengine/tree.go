@@ -35,7 +35,7 @@ func runGitWithEnv(env []string, args ...string) (string, error) {
 // without altering the user's primary staging area (.git/index).
 //
 // Steps:
-//  1. Creates a uniquely named temporary index file in .git/ (e.g. igit_index_<timestamp>_<random>.tmp).
+//  1. Creates a uniquely named temporary index file in .git/ (e.g. edio_index_<timestamp>_<random>.tmp).
 //  2. Sets GIT_INDEX_FILE to force all subsequent Git commands in this run to target that file.
 //  3. Seeds the temporary index from the current HEAD commit using "git read-tree HEAD" (if HEAD exists).
 //  4. Stages all current file modifications, additions, and deletions using "git add -A" (respecting .gitignore).
@@ -62,7 +62,7 @@ func BuildIsolatedTree() (string, error) {
 	randomBytes := make([]byte, 4)
 	_, _ = rand.Read(randomBytes)
 	tempIndexName := fmt.Sprintf(
-		"igit_index_%d_%s.tmp",
+		"edio_index_%d_%s.tmp",
 		time.Now().UnixNano(),
 		hex.EncodeToString(randomBytes),
 	)

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/devxdh/igit/pkg/gitengine"
+	"github.com/devxdh/edio/pkg/gitengine"
 )
 
 // TurnRecord holds metadata about a single snapshot turn.

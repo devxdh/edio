@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/devxdh/igit/pkg/testutil"
+	"github.com/devxdh/edio/pkg/testutil"
 )
 
 func TestZeroPollution(t *testing.T) {
-	testutil.SetupTestRepo(t, "igit-operations-test-*")
+	testutil.SetupTestRepo(t, "edio-operations-test-*")
 
 	// 1. Capture baseline HEAD commit before any shadow turns are recorded
 	baselineHeadSHA, err := GetRef("HEAD")
@@ -47,7 +47,7 @@ func TestZeroPollution(t *testing.T) {
 			t.Fatalf("[TURN #%d] CommitTree failed: %v", turn, err)
 		}
 
-		shadowRef := fmt.Sprintf("refs/igit/sessions/sess_alpha/%d", turn)
+		shadowRef := fmt.Sprintf("refs/edio/sessions/sess_alpha/%d", turn)
 		if err := UpdateRef(shadowRef, commitSHA); err != nil {
 			t.Fatalf("turn %d: UpdateRef failed: %v", turn, err)
 		}
@@ -67,7 +67,7 @@ func TestZeroPollution(t *testing.T) {
 
 	// 4. Verify each individual turn ref exists on disk and resolves to a valid SHA
 	for turn := range 5 {
-		ref := fmt.Sprintf("refs/igit/sessions/sess_alpha/%d", turn)
+		ref := fmt.Sprintf("refs/edio/sessions/sess_alpha/%d", turn)
 		sha, err := GetRef(ref)
 		if err != nil || len(sha) != 40 {
 			t.Errorf("turn ref %s missing or invalid: %s (err: %v)", ref, sha, err)
@@ -76,7 +76,7 @@ func TestZeroPollution(t *testing.T) {
 }
 
 func BenchmarkTurnSnapshotLatency(b *testing.B) {
-	tmpDir := testutil.SetupTestRepo(b, "igit-operations-bench-*")
+	tmpDir := testutil.SetupTestRepo(b, "edio-operations-bench-*")
 
 	testFile := filepath.Join(tmpDir, "index.ts")
 	if err := os.WriteFile(testFile, []byte("console.log('Hello from Benchmark');"), 0o644); err != nil {
@@ -103,7 +103,7 @@ func BenchmarkTurnSnapshotLatency(b *testing.B) {
 			b.Fatalf("CommitTree failed: %v", err)
 		}
 
-		refName := fmt.Sprintf("refs/igit/bench/%d", i)
+		refName := fmt.Sprintf("refs/edio/bench/%d", i)
 		if err := UpdateRef(refName, commitSHA); err != nil {
 			b.Fatalf("UpdateRef failed: %v", err)
 		}

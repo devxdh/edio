@@ -1,4 +1,4 @@
-module github.com/devxdh/igit
+module github.com/devxdh/edio
 
 go 1.26.6
 

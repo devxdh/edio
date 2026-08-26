@@ -1,2 +1,2 @@
 dev:
-	go run ./cmd/igit/
+	go run ./cmd/edio/

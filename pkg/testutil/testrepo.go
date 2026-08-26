@@ -49,10 +49,10 @@ func SetupTestRepo(tb testing.TB, prefix string) string {
 		tb.Fatalf("git init failed: %v", err)
 	}
 
-	if _, err := runGit("config", "user.name", "igit-test-bot"); err != nil {
+	if _, err := runGit("config", "user.name", "edio-test-bot"); err != nil {
 		tb.Fatalf("failed to configure test user.name: %v", err)
 	}
-	if _, err := runGit("config", "user.email", "bot@igit.dev"); err != nil {
+	if _, err := runGit("config", "user.email", "bot@edio.dev"); err != nil {
 		tb.Fatalf("failed to configure test user.email: %v", err)
 	}
 

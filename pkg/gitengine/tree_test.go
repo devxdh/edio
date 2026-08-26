@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/devxdh/igit/pkg/testutil"
+	"github.com/devxdh/edio/pkg/testutil"
 )
 
 type statusRecord struct {
@@ -50,7 +50,7 @@ func getPorcelainStatus(tb testing.TB) map[string]statusRecord {
 }
 
 func TestBuildIsolatedTree(t *testing.T) {
-	tmpDir := testutil.SetupTestRepo(t, "igit-tree-behavior-*")
+	tmpDir := testutil.SetupTestRepo(t, "edio-tree-behavior-*")
 
 	// 1. Commit a baseline .gitignore file
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")

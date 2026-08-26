@@ -7,20 +7,20 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/devxdh/igit/pkg/gitengine"
+	"github.com/devxdh/edio/pkg/gitengine"
 )
 
 const (
-	// IgitDirName is the directory inside .git where igit metadata is stored.
-	IgitDirName = "igit"
+	// edioDirName is the directory inside .git where edio metadata is stored.
+	edioDirName = "edio"
 
 	// ActiveSessionFileName is the JSON file tracking the currently active session.
 	ActiveSessionFileName = "active_session.json"
 )
 
-// GetIgitDir returns the absolute path to the .git/igit directory,
+// GetedioDir returns the absolute path to the .git/edio directory,
 // creating it if it does not already exist.
-func GetIgitDir() (string, error) {
+func GetedioDir() (string, error) {
 	if err := gitengine.EnsureGitRepo(); err != nil {
 		return "", err
 	}
@@ -36,25 +36,25 @@ func GetIgitDir() (string, error) {
 		return "", fmt.Errorf("failed to resolve absolute git directory: %w", err)
 	}
 
-	igitDir := filepath.Join(absGitDir, IgitDirName)
-	if err := os.MkdirAll(igitDir, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create igit directory: %w", err)
+	edioDir := filepath.Join(absGitDir, edioDirName)
+	if err := os.MkdirAll(edioDir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create edio directory: %w", err)
 	}
 
-	return igitDir, nil
+	return edioDir, nil
 }
 
-// ActiveSessionPath returns the absolute path to .git/igit/active_session.json.
+// ActiveSessionPath returns the absolute path to .git/edio/active_session.json.
 func ActiveSessionPath() (string, error) {
-	igitDir, err := GetIgitDir()
+	edioDir, err := GetedioDir()
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(igitDir, ActiveSessionFileName), nil
+	return filepath.Join(edioDir, ActiveSessionFileName), nil
 }
 
-// SaveActiveSession writes the Session state to .git/igit/active_session.json.
+// SaveActiveSession writes the Session state to .git/edio/active_session.json.
 //
 // It uses an atomic write pattern (writing to a temp file and renaming)
 // to prevent data corruption if the process is terminated mid-write.
@@ -87,7 +87,7 @@ func SaveActiveSession(sess *Session) error {
 	return nil
 }
 
-// LoadActiveSession reads the active session from .git/igit/active_session.json.
+// LoadActiveSession reads the active session from .git/edio/active_session.json.
 //
 // If the file does not exist, it initializes a new Session, persists it to disk,
 // and returns the newly created instance.

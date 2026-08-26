@@ -4,11 +4,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/devxdh/igit/pkg/testutil"
+	"github.com/devxdh/edio/pkg/testutil"
 )
 
 func TestStore_BootstrapAndPersist(t *testing.T) {
-	testutil.SetupTestRepo(t, "igit-store-test-*")
+	testutil.SetupTestRepo(t, "edio-store-test-*")
 
 	// Inital load must auto-create a new active session
 	sess1, err := LoadActiveSession()
@@ -56,7 +56,7 @@ func TestStore_BootstrapAndPersist(t *testing.T) {
 }
 
 func TestStore_SaveNilSession(t *testing.T) {
-	testutil.SetupTestRepo(t, "igit-store-nil-*")
+	testutil.SetupTestRepo(t, "edio-store-nil-*")
 
 	err := SaveActiveSession(nil)
 	if err == nil {

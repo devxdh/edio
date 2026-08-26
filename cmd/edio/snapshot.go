@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/devxdh/igit/pkg/gitengine"
-	"github.com/devxdh/igit/pkg/session"
+	"github.com/devxdh/edio/pkg/gitengine"
+	"github.com/devxdh/edio/pkg/session"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +34,7 @@ and creates a shadow turn commit linked into the active session DAG.`,
 			return fmt.Errorf("failed to build isolated tree: %w", err)
 		}
 
-		// Record turn commit in refs/igit/active/*
+		// Record turn commit in refs/edio/active/*
 		commitSHA, err := sess.RecordTurn(treeSHA, snapshotMsg)
 		if err != nil {
 			return fmt.Errorf("failed to record turn: %w", err)
