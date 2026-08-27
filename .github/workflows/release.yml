@@ -11,9 +11,8 @@ permissions:
 
 jobs:
   build:
-    name: Build and Publish Binaries
+    name: Compile Binaries (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
         include:
@@ -82,19 +81,41 @@ jobs:
           zip ${{ matrix.archive_name }} ${{ matrix.output_name }}
           sha256sum ${{ matrix.archive_name }} > ${{ matrix.archive_name }}.sha256
 
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Stash Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          files: |
+          name: dist-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
             dist/${{ matrix.archive_name }}
             dist/${{ matrix.archive_name }}.sha256
+          retention-days: 1
+
+  publish-release:
+    name: Upload Release Assets
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: dist-*
+          merge-multiple: true
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   homebrew:
     name: Update Homebrew Tap
-    needs: build
+    needs: publish-release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -106,7 +127,6 @@ jobs:
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: "homebrew-tap"
-          permissions: "contents:write"
 
       - name: Checkout homebrew-tap
         uses: actions/checkout@v4
