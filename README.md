@@ -18,6 +18,7 @@ Standard Git was designed for humans making deliberate, finished commits. When a
 * **Instant Rollbacks:** Jump back to any previous turn in milliseconds.
 * **Interactive Terminal UI:** Inspect turn diffs side-by-side with GitHub Dark syntax highlighting.
 * **One-Command Squash:** When the agent finishes, `edio accept` squashes all turns into a single clean commit on your branch.
+* **Automatic Storage GC:** 10-day retention cleaner automatically reclaims disk space from old shadow sessions.
 
 ---
 
@@ -171,6 +172,23 @@ edio snapshot -m "turn summary"
 
 ---
 
+## Garbage Collection & Storage Management
+
+`edio` manages disk space safely at the session boundary:
+
+* **Automatic Cleanup:** Every time you run `edio accept`, `edio` triggers a lightweight background check to prune shadow sessions older than **10 days**.
+* **Manual Cleanup:** You can manually run garbage collection at any time:
+  ```bash
+  # Prune sessions older than 10 days (default)
+  edio gc
+
+  # Prune sessions older than 3 days
+  edio gc --days 3
+  ```
+* **Safety Invariant:** `edio gc` strictly protects your currently active session from deletion, and only prunes completed or abandoned sessions that exceed the retention limit.
+
+---
+
 ## Command Reference
 
 | Command | Description |
@@ -195,6 +213,7 @@ edio snapshot -m "turn summary"
 1. **Isolated Index (`BuildIsolatedTree`):** During a snapshot, `edio` points `GIT_INDEX_FILE` to a temporary scratchpad in `.git/`. It runs `git add -A` and `git write-tree` inside this temporary index, keeping `.git/index` untouched.
 2. **Shadow DAG (`commit-tree`):** Each turn creates a Git commit object linked to the previous turn, stored under custom reference paths (`refs/edio/active/<session_id>/<turn>`).
 3. **Atomic Squash on Accept:** When `edio accept` is called, it extracts the tree SHA from the latest turn, creates a single commit pointing to `HEAD` as parent, advances the active branch pointer, and archives the session.
+4. **Clean Disk Reclamation (`gc`):** When stale sessions expire, deleting their `refs/edio/*` pointers allows Git's native object pruning (`git prune`) to reclaim disk space without touching your project repository history.
 
 ---
 
