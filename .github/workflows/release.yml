@@ -183,6 +183,9 @@ jobs:
           EOF
 
       - name: Commit and Push Formula
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           cd homebrew-tap
           git config user.name "github-actions[bot]"
@@ -192,5 +195,5 @@ jobs:
             echo "No changes to formula"
           else
             git commit -m "chore: bump formula to ${{ github.ref_name }}"
-            git push origin main
+            git push "https://x-access-token:${APP_TOKEN}@github.com/${OWNER}/homebrew-tap.git" main
           fi
