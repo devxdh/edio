@@ -1,0 +1,52 @@
+version: 2
+
+project_name: edio
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: edio
+    main: ./cmd/edio
+    binary: edio
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: edio
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+brews:
+  - name: edio
+    repository:
+      owner: devxdh
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/devxdh/edio"
+    description: "Branchless shadow Git version control for AI coding agents"
+    license: "MIT"
+    directory: Formula
+    test: |
+      system "#{bin}/edio --help"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
