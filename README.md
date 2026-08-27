@@ -2,6 +2,8 @@
 
 Branchless, high-speed shadow version control built for AI coding agents.
 
+<img width="1920" height="1080" alt="demo" src="https://github.com/user-attachments/assets/777a11f4-c4db-4b1c-8814-d07b51a2da0b" />
+
 ---
 
 ## Why edio?
