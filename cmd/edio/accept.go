@@ -76,6 +76,11 @@ var acceptCmd = &cobra.Command{
 			return fmt.Errorf("warning: failed to archive session: %w", err)
 		}
 
+		// Trigger background GC to prune stale/archived sessions older than 10 days
+		go func() {
+			_, _ = session.PruneExpiredSessions(session.DefaultTTL)
+		}()
+
 		fmt.Printf("%s %s %s (%s)\n", ui.BranchBadge(targetBranch), ui.SHABadge(officialCommitSHA), commitMsg, ui.Dim(fmt.Sprintf("%d turns squashed", turnCount)))
 		return nil
 	},

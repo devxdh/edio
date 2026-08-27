@@ -182,6 +182,7 @@ edio snapshot -m "turn summary"
 | `edio diff [turn] [-f file]` | Show colorized diff for a specific turn |
 | `edio restore <turn> [-f file]` | Roll back workspace (or single file) to a specific turn |
 | `edio accept "<commit_msg>"` | Squash all session turns into a clean commit on current branch |
+| `edio gc [-d <days>]` | Clean up shadow sessions older than retention limit (default: 10 days) |
 | `edio ui` *(alias: `tui`)* | Launch the interactive split-pane terminal dashboard |
 | `edio mcp` | Start the stdio Model Context Protocol (MCP) JSON-RPC server |
 
