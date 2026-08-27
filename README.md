@@ -6,26 +6,42 @@ Branchless, high-speed shadow version control built for AI coding agents.
 
 ---
 
-Over the past few months, I found myself using coding agents like Claude Code, Cursor, Windsurf, and Aider for almost every non-trivial refactor. While they write good code, they create a very specific kind of mess in day-to-day development.
+## Why I Built edio
+
+In my daily workflow, I rely heavily on coding agents like Claude Code, Cursor, Windsurf, and Aider for refactoring and building features. While these tools write good code, iterative agent development creates a specific set of problems:
 
 ### The Problem
+1. **Broken Workspaces:** When an agent takes a wrong turn midway through a multi-step task, there is no quick way to inspect prior turns or revert just the broken changes.
+2. **Polluted Commit History:** If you let an agent commit every small attempt, your Git log fills up with messy trial-and-error commits.
+3. **Branch Overhead:** Creating throwaway branches for every short agent session causes constant stash conflicts, resets language servers, and triggers slow file indexers.
 
-When you let an agent work across 10 or 15 turns, things inevitably go off the rails at some point:
+### The Solution
+I built `edio` to provide an invisible safety net during agent sessions without requiring temporary branches.
 
-1. **Broken workspaces:** When an agent makes a mistake midway through a multi-turn task, you have no quick way to inspect prior turns or undo just the bad edits.
-2. **Polluted commit history:** Letting an agent commit after every small step clutters your Git log with throwaway trial-and-error commits ("fix typo", "try again", "attempt 3").
-3. **Branch friction:** Creating temporary branches for quick agent tasks causes constant stash conflicts, resets language servers, and triggers slow file watchers.
+`edio` does not replace Git. It is a single Go binary that works inside your existing `.git` folder. It records turn-by-turn snapshots into an isolated shadow history using low-level Git plumbing.
 
-### What is edio?
+* **Zero Index Pollution:** Your staging area (`.git/index`), unstaged changes, and active branch stay untouched.
+* **Instant Rollbacks:** If an agent makes a mistake on Turn 8, you can open the terminal UI (`edio ui`), inspect the diffs, and press `r` to restore your working files to Turn 5 in milliseconds.
+* **Single-Command Squash:** When the agent finishes and tests pass, `edio accept "feat: add feature"` squashes the entire session into one clean commit on your current branch.
 
-`edio` provides an invisible safety net when running coding agents, without needing throwaway branches.
+---
 
-**To be clear:** `edio` is not a new version control system and does not replace Git. It is a single Go binary that operates entirely inside your existing `.git` directory, using low-level Git plumbing to record snapshots of each agent turn in the background.
+## How It Works Under the Hood
 
-* **Zero Index Pollution:** Your staging area (`.git/index`), unstaged changes, and active branch stay completely untouched.
-* **Instant Rollbacks:** If an agent makes a mistake on Turn 8, open the split-pane TUI (`edio ui`), scrub back to Turn 5, check the diff, and press `r` to instantly roll your files back to that exact working state.
-* **One-Command Squash:** When the agent finishes and tests pass, run `edio accept "feat: add feature"` to squash the entire session into one clean commit on your active branch.
-* **Automatic Storage GC:** 10-day retention cleaner automatically prunes old shadow sessions.
+I wanted `edio` to operate without interfering with normal Git workflows. Here is how it achieves isolation:
+
+```text
+User Workspace ──► Staged via GIT_INDEX_FILE ──► git write-tree ──► Shadow Commit DAG
+                       (Temporary Index)                               (refs/edio/active/*)
+                             │
+                             ▼ (Deleted immediately)
+                   Primary .git/index stays clean
+```
+
+1. **Isolated Index (`GIT_INDEX_FILE`):** Instead of running `git add` (which would overwrite your primary `.git/index`), `edio` points the `GIT_INDEX_FILE` environment variable to a temporary scratchpad. It stages files there, creates a tree object using `git write-tree`, and deletes the temporary index file immediately.
+2. **Shadow Commit DAG (`refs/edio/*`):** Each turn is committed with `git commit-tree` and linked to the previous turn under a custom reference namespace (`refs/edio/active/<session_id>/<turn>`). Your active branch pointer and `HEAD` never move.
+3. **Atomic Promotion on Accept:** When you run `edio accept`, `edio` reads the tree SHA from the latest turn, creates a single commit pointing to `HEAD` as its parent, and advances your active branch.
+4. **Automated Garbage Collection:** Stale sessions older than 10 days have their reference pointers pruned automatically, allowing Git's native object pruner (`git prune`) to reclaim disk space.
 
 ---
 
@@ -45,40 +61,38 @@ go install github.com/devxdh/edio/cmd/edio@latest
 
 ### Pre-built Binaries
 
-Download pre-compiled binaries for Linux, macOS, and Windows from the [GitHub Releases](https://github.com/devxdh/edio/releases) page.
+Pre-compiled binaries for Linux, macOS, and Windows are available on the [Releases](https://github.com/devxdh/edio/releases) page.
 
 ---
 
-## First-Time User Walkthrough
+## 2-Minute Quickstart
 
-Here is how to use `edio` in any Git repository in under 2 minutes:
+Here is how you can use `edio` in any Git repository:
 
-### 1. Initialize edio in your project
+### 1. Initialize your project
 
 ```bash
 cd /path/to/your/project
 edio init
 ```
 
-This creates the shadow storage directory in `.git/edio/` and auto-configures hooks & MCP servers for your AI tools.
+This sets up `.git/edio/` and automatically configures MCP servers and lifecycle hooks for your installed AI tools.
 
 ### 2. Record Turn Snapshots
 
-As you or your AI agent edit files, record snapshots after each meaningful change:
+As you or your agent modify files, record snapshots after each logical step:
 
 ```bash
-# Make some edits
-echo "func HandleAuth() {}" >> auth.go
+# Edit code
+echo "func ValidateToken() {}" >> auth.go
 
-# Take an isolated shadow snapshot
-edio snapshot -m "added HandleAuth function"
+# Take a shadow snapshot
+edio snapshot -m "added token validation"
 ```
 
-You can record as many turns as you want. Your regular Git status and commit history remain completely clean.
+Your regular `git status` and commit history remain completely untouched.
 
-### 3. View Turn History
-
-List all turns in your current session:
+### 3. Inspect Turn History
 
 ```bash
 edio log
@@ -89,41 +103,40 @@ Output:
 Session sess_1787756569_0babd925 (3 turns)
 
 * [Turn 1] (7c836f4) added HandleAuth function
-* [Turn 2] (7e7dbee) added JWT validation logic
-* [Turn 3] (868d16e) added unit tests for auth module
+* [Turn 2] (7e7dbee) added token validation
+* [Turn 3] (868d16e) added auth unit tests
 ```
 
-### 4. Launch the Interactive UI
+### 4. Open the Interactive UI
 
 ```bash
 edio ui
 ```
 
-* Use `j` / `k` (or arrow keys / mouse) to browse turns in the timeline.
-* View syntax-highlighted diffs on the right pane.
-* Press `r` on any turn to instantly roll back your working files to that state.
+* Navigate turns with `j` / `k` (or arrow keys).
+* Inspect syntax-highlighted diffs on the right panel.
+* Press `r` on any turn to instantly revert your workspace to that state.
 * Press `Tab` to scroll the diff viewport.
-* Press `q` to exit.
+* Press `q` to quit.
 
-### 5. Accept and Commit
+### 5. Squash and Commit
 
-When you are satisfied with the agent's work and want to make an official commit:
+When you are satisfied with the final result:
 
 ```bash
-edio accept "feat: implement user authentication and unit tests"
+edio accept "feat: implement user authentication"
 ```
 
-All session turns are squashed into a single commit on your current branch, and the shadow session is archived.
+All turns from the session are squashed into a single clean commit on your active branch.
 
 ---
 
-## 3 Ways It Integrates with Agents
+## Connecting with AI Agents
 
-Running `edio init` automatically configures your workspace for all major AI tools:
+Running `edio init` automatically configures your repository for all major agent environments:
 
 ### 1. Universal MCP Server (Cursor, Gemini CLI, Antigravity, VS Code, Windsurf)
-
-`edio init` automatically configures:
+`edio init` generates MCP configuration files for your IDEs:
 * **Cursor:** `.cursor/mcp.json`
 * **Gemini CLI / Antigravity:** `.gemini/settings.json`
 * **VS Code / Cline / Roo Code:** `.vscode/mcp.json`
@@ -139,17 +152,15 @@ Running `edio init` automatically configures your workspace for all major AI too
 }
 ```
 
-**Exposed Native MCP Tools:**
-* `edio_snapshot`: AI models record snapshots with clear turn messages.
-* `edio_log`: AI models query previous turns in the session.
-* `edio_restore`: AI models or developers roll back the full workspace or a single file (`-f`).
+**Exposed MCP Tools:**
+* `edio_snapshot`: Allows the model to take snapshots with descriptive summaries.
+* `edio_log`: Allows the model to inspect past turns in the session.
+* `edio_restore`: Allows the model or user to roll back the full workspace or a single file (`-f`).
 
 ---
 
-### 2. Auto Lifecycle Hooks (Claude Code CLI)
-
-`edio init` writes a `Stop` hook into `.claude/settings.json`:
-
+### 2. Lifecycle Hooks (Claude Code CLI)
+`edio init` writes a `Stop` event hook to `.claude/settings.json`:
 ```json
 {
   "hooks": {
@@ -159,56 +170,36 @@ Running `edio init` automatically configures your workspace for all major AI too
   }
 }
 ```
-
-Every time Claude finishes a prompt turn or tool call, a snapshot is captured automatically in the background with zero manual steps.
+Every time Claude completes a turn or tool call, a snapshot is recorded automatically in the background.
 
 ---
 
-### 3. Universal Process Wrapper (Aider, Python Scripts, CLI Loops)
-
-For custom Python agent loops, Aider, or CLI scripts without hook support, prefix your command with `edio run`:
-
+### 3. Process Execution Wrapper (Aider, Python Scripts, CLI Loops)
+For CLI agents or custom scripts without hook support, prefix the execution command with `edio run`:
 ```bash
-# Wraps Python agent execution
-edio run python agent.py "refactor database models"
+# Wraps Python agent scripts
+edio run python agent.py "refactor database schema"
 
 # Wraps Aider
 edio run aider --message "add unit tests"
 ```
+`edio run` forwards terminal I/O interactively and captures a snapshot as soon as the child process exits.
 
-`edio run` passes through terminal I/O interactively and automatically records a snapshot the moment the child process exits.
-
-> **Universal Prompt Rules:** `edio init` also generates `EDIO.md` in your project root to instruct scanning LLMs (ChatGPT, Grok, DeepSeek) to use `edio snapshot` instead of running raw `git commit` commands.
-
----
-
-## How It Works Under the Hood
-
-`edio` is designed to be completely invisible to normal Git operations:
-
-1. **Temporary Index Files (`GIT_INDEX_FILE`):** Instead of running `git add` (which would overwrite your real `.git/index`), `edio` points `GIT_INDEX_FILE` to a temporary scratch file in `.git/`. It stages files there, creates a tree object with `git write-tree`, and commits it with `git commit-tree`.
-2. **Shadow DAG (`refs/edio/*`):** Each turn commit is saved directly into custom reference paths (`refs/edio/active/<session_id>/<turn>`) instead of a branch. Your actual staging area, your unstaged changes, and your `HEAD` remain completely untouched.
-3. **Atomic Squash on Accept:** When you run `edio accept`, `edio` reads the tree SHA of your latest turn, creates a single commit pointing to `HEAD` as parent, advances your active branch pointer, and archives the session.
-4. **Clean Disk Reclamation (`gc`):** Stale sessions older than 10 days have their `refs/edio/*` pointers pruned automatically, allowing Git's native garbage collector (`git prune`) to reclaim disk space.
-
-For an in-depth breakdown of data structures and internal plumbing, see [ARCHITECTURE.md](ARCHITECTURE.md).
+> `edio init` also creates `EDIO.md` in the project root to instruct scanning LLMs (ChatGPT, Grok, DeepSeek) to use `edio snapshot` instead of running raw `git commit` commands.
 
 ---
 
-## Garbage Collection & Storage Management
+## Storage & Garbage Collection
 
-`edio` manages disk space safely at the session boundary:
+`edio` manages disk storage safely at the session boundary:
 
-* **Automatic Cleanup:** Every time you run `edio accept`, `edio` triggers a lightweight background check to prune shadow sessions older than **10 days**.
-* **Manual Cleanup:** You can manually run garbage collection at any time:
+* **Automatic Background Cleanup:** Whenever you run `edio accept`, `edio` checks for and prunes shadow sessions older than **10 days**.
+* **Manual Pruning:** You can trigger cleanup manually at any time:
   ```bash
-  # Prune sessions older than 10 days (default)
-  edio gc
-
-  # Prune sessions older than 3 days
-  edio gc --days 3
+  edio gc           # Prune sessions older than 10 days (default)
+  edio gc --days 3  # Prune sessions older than 3 days
   ```
-* **Safety Invariant:** `edio gc` strictly protects your currently active session from deletion, and only prunes completed or abandoned sessions that exceed the retention limit.
+* **Active Session Safety:** `edio gc` strictly protects your active session from deletion, only pruning completed or abandoned sessions.
 
 ---
 
@@ -238,7 +229,9 @@ make build
 make test
 ```
 
-Binary will be generated at `./bin/edio`.
+The compiled binary will be placed at `./bin/edio`.
+
+For an in-depth explanation of the codebase architecture and internal packages, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
