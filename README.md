@@ -215,6 +215,8 @@ edio snapshot -m "turn summary"
 3. **Atomic Squash on Accept:** When `edio accept` is called, it extracts the tree SHA from the latest turn, creates a single commit pointing to `HEAD` as parent, advances the active branch pointer, and archives the session.
 4. **Clean Disk Reclamation (`gc`):** When stale sessions expire, deleting their `refs/edio/*` pointers allows Git's native object pruning (`git prune`) to reclaim disk space without touching your project repository history.
 
+For an in-depth breakdown of the codebase and internal data structures, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ---
 
 ## Building from Source
