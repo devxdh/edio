@@ -106,6 +106,7 @@ jobs:
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: "homebrew-tap"
+          permissions: "contents:write"
 
       - name: Checkout homebrew-tap
         uses: actions/checkout@v4
