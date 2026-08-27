@@ -14,9 +14,10 @@ import (
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize edio in the repository and configure AI agent hooks",
-	Long: `Sets up the .git/edio storage directory, configures automated lifecycle
-hooks for supported agents (e.g. Claude Code), and writes EDIO.md operational rules.`,
+	Short: "Initialize edio in the repository and configure AI agent hooks & MCP",
+	Long: `Sets up the .git/edio shadow storage directory, configures automated lifecycle
+hooks for Claude Code, configures MCP JSON-RPC servers for Cursor, Gemini, Antigravity,
+and VS Code, and writes the EDIO.md operational guidelines.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := gitengine.EnsureGitRepo(); err != nil {
 			return err
@@ -31,21 +32,42 @@ hooks for supported agents (e.g. Claude Code), and writes EDIO.md operational ru
 
 		fmt.Println("Initialized edio shadow storage in .git/edio/")
 
-		// 2. Configure Claude Code settings hook (.claude/settings.json)
+		// 2. Configure Claude Code lifecycle hooks (.claude/settings.json)
 		if err := configureClaudeHooks(); err != nil {
 			fmt.Println(ui.Warning(fmt.Sprintf("failed to configure Claude hooks: %v", err)))
 		} else {
 			fmt.Println(ui.Bullet("Configured Claude Code lifecycle hooks (.claude/settings.json)"))
 		}
 
-		// 3. Generate EDIO.md agent instruction context
+		// 3. Configure Cursor MCP (.cursor/mcp.json)
+		if err := configureMCPServer(".cursor", "mcp.json"); err != nil {
+			fmt.Println(ui.Warning(fmt.Sprintf("failed to configure Cursor MCP: %v", err)))
+		} else {
+			fmt.Println(ui.Bullet("Configured Cursor MCP server (.cursor/mcp.json)"))
+		}
+
+		// 4. Configure Gemini & Antigravity MCP (.gemini/settings.json)
+		if err := configureMCPServer(".gemini", "settings.json"); err != nil {
+			fmt.Println(ui.Warning(fmt.Sprintf("failed to configure Gemini/Antigravity MCP: %v", err)))
+		} else {
+			fmt.Println(ui.Bullet("Configured Gemini/Antigravity MCP server (.gemini/settings.json)"))
+		}
+
+		// 5. Configure VS Code / Cline / Roo Code MCP (.vscode/mcp.json)
+		if err := configureMCPServer(".vscode", "mcp.json"); err != nil {
+			fmt.Println(ui.Warning(fmt.Sprintf("failed to configure VS Code MCP: %v", err)))
+		} else {
+			fmt.Println(ui.Bullet("Configured VS Code MCP server (.vscode/mcp.json)"))
+		}
+
+		// 6. Generate EDIO.md agent instruction context
 		if err := writeAgentRules(); err != nil {
 			fmt.Println(ui.Warning(fmt.Sprintf("failed to generate EDIO.md: %v", err)))
 		} else {
 			fmt.Println(ui.Bullet("Generated EDIO.md operational guidelines for AI agents"))
 		}
 
-		fmt.Printf("\n%s\n", ui.Bold("Ready for AI agent sessions."))
+		fmt.Printf("\n%s\n", ui.Bold("Ready for AI agent sessions (Claude, Cursor, Gemini, Antigravity, VS Code)."))
 		return nil
 	},
 }
@@ -99,6 +121,49 @@ func configureClaudeHooks() error {
 	return os.WriteFile(settingsPath, data, 0o644)
 }
 
+// configureMCPServer injects the edio MCP server configuration into a target JSON file
+func configureMCPServer(dirName, fileName string) error {
+	repoRoot, err := gitengine.GetRepoRoot()
+	if err != nil {
+		return err
+	}
+
+	targetDir := filepath.Join(repoRoot, dirName)
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return err
+	}
+
+	configPath := filepath.Join(targetDir, fileName)
+	var config map[string]any
+
+	// Read existing configuration if present
+	if data, err := os.ReadFile(configPath); err == nil {
+		_ = json.Unmarshal(data, &config)
+	}
+	if config == nil {
+		config = make(map[string]any)
+	}
+
+	// Retrieve or build mcpServers map
+	serversMap, ok := config["mcpServers"].(map[string]any)
+	if !ok {
+		serversMap = make(map[string]any)
+	}
+
+	serversMap["edio"] = map[string]any{
+		"command": "edio",
+		"args":    []string{"mcp"},
+	}
+	config["mcpServers"] = serversMap
+
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(configPath, data, 0o644)
+}
+
 // writeAgentRules generates the operational cheat-sheet context file in repo root
 func writeAgentRules() error {
 	repoRoot, err := gitengine.GetRepoRoot()
@@ -115,10 +180,11 @@ edio maintains an isolated Shadow DAG to record iterative turn progress without 
 1. **Never run raw git commit or git add** during iterative development turns.
 2. After finishing a task, sub-task, or bug fix sequence, run:
    ` + "`edio snapshot -m \"<concise description of changes>\"`" + `
+   (Or use the ` + "`edio_snapshot`" + ` MCP tool).
 3. If code breaks or tests fail, inspect prior turns via:
    ` + "`edio log`" + `
-4. To revert the entire workspace to a previous working turn:
-   ` + "`edio restore <turn_number>`" + `
+4. To revert the entire workspace (or a single file) to a previous working turn:
+   ` + "`edio restore <turn_number> [-f <file_path>]`" + `
 5. When the user explicitly requests to finalize/commit the feature:
    ` + "`edio accept \"<semantic commit message>\"`" + `
 `

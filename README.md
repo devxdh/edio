@@ -114,29 +114,28 @@ All session turns are squashed into a single commit on your current branch, and 
 
 ## Agent Integration Guides
 
-`edio` adapts to whatever agent setup you use:
+Running `edio init` automatically configures your repository for all major AI tools and IDEs:
 
-### Setup A: Claude Code
-
-`edio init` automatically configures lifecycle hooks in `.claude/settings.json`:
-
+### 1. Claude Code (Lifecycle Hooks)
+`edio init` writes to `.claude/settings.json`:
 ```json
 {
   "hooks": {
-    "postToolExecution": "edio snapshot -m 'claude turn'"
+    "Stop": [
+      { "type": "command", "command": "edio snapshot -m \"prompt turn completed\"" }
+    ]
   }
 }
 ```
-
-Claude Code will automatically record a snapshot after every tool execution without manual commands.
+Claude Code automatically records a snapshot after every prompt turn with zero manual steps.
 
 ---
 
-### Setup B: Cursor, Windsurf, or Claude Desktop (via MCP)
-
-`edio` includes a built-in Model Context Protocol (MCP) server.
-
-Add the following to your IDE's MCP configuration file (e.g. `~/.cursor/mcp.json` or `claude_desktop_config.json`):
+### 2. Cursor, Gemini CLI, Antigravity & VS Code (Universal MCP)
+`edio init` automatically creates MCP configuration files for your IDEs:
+* **Cursor:** `.cursor/mcp.json`
+* **Gemini CLI / Antigravity:** `.gemini/settings.json`
+* **VS Code / Cline / Roo Code:** `.vscode/mcp.json`
 
 ```json
 {
@@ -150,26 +149,18 @@ Add the following to your IDE's MCP configuration file (e.g. `~/.cursor/mcp.json
 ```
 
 **Exposed MCP Tools:**
-* `edio_snapshot`: Allows the agent to take turn snapshots with descriptive messages.
-* `edio_log`: Allows the agent to query previous turns in the session.
-* `edio_restore`: Allows the agent or developer to revert to any turn.
+* `edio_snapshot`: AI models record snapshots with clear turn messages.
+* `edio_log`: AI models query previous turns in the session.
+* `edio_restore`: AI models or developers roll back the full workspace or a single file (`-f`).
 
 ---
 
-### Setup C: Custom Scripts, Non-Hook Agents & Aider
-
-If you use custom Python scripts, Aider, or general LLM wrappers without built-in hooks:
-
-#### Option 1: Wrap agent execution
+### 3. Custom Scripts, Non-Hook Agents & Aider (Process Wrapper)
+For custom Python agent loops, Aider, or CLI scripts without hook support, prefix with `edio run`:
 ```bash
 # Runs the command and automatically records a snapshot when it exits
 edio run python agent.py "refactor database models"
-```
-
-#### Option 2: Call CLI snapshots directly in your script
-```bash
-# In your agent loop or Makefile
-edio snapshot -m "turn summary"
+edio run aider --message "add tests"
 ```
 
 ---
