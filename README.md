@@ -47,6 +47,12 @@ User Workspace ──► Staged via GIT_INDEX_FILE ──► git write-tree ─�
 
 ## Installation
 
+### With Homebrew (macOS & Linux)
+
+```bash
+brew install devxdh/tap/edio
+```
+
 ### Quick Install (Linux & macOS)
 
 ```bash
