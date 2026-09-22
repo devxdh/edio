@@ -31,34 +31,19 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("failed to load active session: %w", err)
 		}
 
-		if targetTurn > sess.TurnCount {
-			return fmt.Errorf(
-				"turn %d does not exist (current session has %d turns)",
-				targetTurn,
-				sess.TurnCount,
-			)
-		}
-
-		targetRef := sess.ActiveRef(targetTurn)
-		targetSHA, err := gitengine.GetRef(targetRef)
-		if err != nil || targetSHA == "" {
-			return fmt.Errorf("failed to resolve target turn ref: %w", err)
-		}
-
-		// Single-file checkout vs. full workspace restoration
-		if restoreFilePath != "" {
-			_, err = gitengine.RunGit("checkout", targetSHA, "--", restoreFilePath)
-			if err != nil {
-				return fmt.Errorf("failed to restore file %s: %w", restoreFilePath, err)
-			}
-			fmt.Printf("Restored %s from %s %s\n", ui.Bold(restoreFilePath), ui.TurnBadge(targetTurn), ui.SHABadge(targetSHA))
-			return nil
-		}
-
-		// Full workspace restore using checkout from the shadow commit tree
-		_, err = gitengine.RunGit("checkout", targetSHA, "--", ".")
+		targetSHA, err := sess.Restore(targetTurn, restoreFilePath)
 		if err != nil {
-			return fmt.Errorf("failed to restore workspace: %w", err)
+			return err
+		}
+
+		if restoreFilePath != "" {
+			fmt.Printf(
+				"Restored %s from %s %s\n",
+				ui.Bold(restoreFilePath),
+				ui.TurnBadge(targetTurn),
+				ui.SHABadge(targetSHA),
+			)
+			return nil
 		}
 
 		fmt.Printf("Restored workspace to %s %s\n", ui.TurnBadge(targetTurn), ui.SHABadge(targetSHA))

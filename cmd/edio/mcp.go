@@ -252,28 +252,14 @@ func executeTool(name string, args map[string]any) (string, bool) {
 			return fmt.Sprintf("Error loading session: %v", err), true
 		}
 
-		if targetTurn < 1 || targetTurn > sess.TurnCount {
-			return fmt.Sprintf("Error: turn %d does not exist (total turns: %d)", targetTurn, sess.TurnCount), true
-		}
-
-		targetRef := sess.ActiveRef(targetTurn)
-		targetSHA, err := gitengine.GetRef(targetRef)
-		if err != nil || targetSHA == "" {
-			return fmt.Sprintf("Error: failed to resolve turn ref: %v", err), true
-		}
-
 		filePath, _ := args["file"].(string)
-		if filePath != "" {
-			_, err = gitengine.RunGit("checkout", targetSHA, "--", filePath)
-			if err != nil {
-				return fmt.Sprintf("Error restoring file: %v", err), true
-			}
-			return fmt.Sprintf("Restored file %s from [Turn %d] (%s)", filePath, targetTurn, targetSHA[:7]), false
+		targetSHA, err := sess.Restore(targetTurn, filePath)
+		if err != nil {
+			return fmt.Sprintf("Error restoring: %v", err), true
 		}
 
-		_, err = gitengine.RunGit("checkout", targetSHA, "--", ".")
-		if err != nil {
-			return fmt.Sprintf("Error restoring workspace: %v", err), true
+		if filePath != "" {
+			return fmt.Sprintf("Restored file %s from [Turn %d] (%s)", filePath, targetTurn, targetSHA[:7]), false
 		}
 		return fmt.Sprintf("Restored workspace to [Turn %d] (%s)", targetTurn, targetSHA[:7]), false
 

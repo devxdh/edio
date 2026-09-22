@@ -410,14 +410,11 @@ func Launch() error {
 			idx := turnList.GetCurrentItem()
 			if idx >= 0 && idx < len(revHistory) {
 				selectedTurn := revHistory[idx]
-				ref := sess.ActiveRef(selectedTurn.Turn)
-				sha, _ := gitengine.GetRef(ref)
-
-				_, err := gitengine.RunGit("checkout", sha, "--", ".")
+				targetSHA, err := sess.Restore(selectedTurn.Turn, "")
 				if err != nil {
 					renderBottomBar(fmt.Sprintf("[red]✘ Error: %v[-]", err))
 				} else {
-					safeSHA := getSafeSHA(sha)
+					safeSHA := getSafeSHA(targetSHA)
 					renderBottomBar(fmt.Sprintf("[green]✔ Workspace reverted to Turn %d (%s)[-]", selectedTurn.Turn, safeSHA))
 					updateDiffForTurn(selectedTurn)
 				}

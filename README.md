@@ -166,7 +166,7 @@ Running `edio init` automatically configures your repository for all major agent
 ---
 
 ### 2. Lifecycle Hooks (Claude Code CLI)
-`edio init` writes a `Stop` event hook to `.claude/settings.json`:
+`edio init` writes a `Stop` event hook to `.claude/settings.local.json`:
 ```json
 {
   "hooks": {

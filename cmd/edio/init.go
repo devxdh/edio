@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/devxdh/edio/pkg/gitengine"
 	"github.com/devxdh/edio/pkg/session"
@@ -32,11 +33,11 @@ and VS Code, and writes the EDIO.md operational guidelines.`,
 
 		fmt.Println("Initialized edio shadow storage in .git/edio/")
 
-		// 2. Configure Claude Code lifecycle hooks (.claude/settings.json)
+		// 2. Configure Claude Code lifecycle hooks (.claude/settings.local.json)
 		if err := configureClaudeHooks(); err != nil {
 			fmt.Println(ui.Warning(fmt.Sprintf("failed to configure Claude hooks: %v", err)))
 		} else {
-			fmt.Println(ui.Bullet("Configured Claude Code lifecycle hooks (.claude/settings.json)"))
+			fmt.Println(ui.Bullet("Configured Claude Code lifecycle hooks (.claude/settings.local.json)"))
 		}
 
 		// 3. Configure Cursor MCP (.cursor/mcp.json)
@@ -72,7 +73,7 @@ and VS Code, and writes the EDIO.md operational guidelines.`,
 	},
 }
 
-// configureClaudeHooks injects the Stop hook into .claude/settings.json
+// configureClaudeHooks injects the Stop hook into .claude/settings.local.json
 func configureClaudeHooks() error {
 	repoRoot, err := gitengine.GetRepoRoot()
 	if err != nil {
@@ -84,7 +85,7 @@ func configureClaudeHooks() error {
 		return err
 	}
 
-	settingsPath := filepath.Join(claudeDir, "settings.json")
+	settingsPath := filepath.Join(claudeDir, "settings.local.json")
 	var settings map[string]any
 
 	// Read existing settings if present
@@ -101,24 +102,38 @@ func configureClaudeHooks() error {
 		hooksMap = make(map[string]any)
 	}
 
-	// Standard Stop event hook: triggers snapshot on prompt completion
-	stopHook := []map[string]any{
-		{
+	// Retrieve or create Stop hooks slice
+	stopList, _ := hooksMap["Stop"].([]any)
+
+	// Check if edio snapshot hook is already present
+	alreadyPresent := false
+	for _, h := range stopList {
+		if hMap, ok := h.(map[string]any); ok {
+			if cmdStr, ok := hMap["command"].(string); ok && strings.Contains(cmdStr, "edio snapshot") {
+				alreadyPresent = true
+				break
+			}
+		}
+	}
+
+	if !alreadyPresent {
+		stopList = append(stopList, map[string]any{
 			"type":    "command",
 			"command": "edio snapshot -m \"prompt turn completed\"",
-		},
+		})
+		hooksMap["Stop"] = stopList
+		settings["hooks"] = hooksMap
+
+		// Write formatted JSON back to .claude/settings.local.json
+		data, err := json.MarshalIndent(settings, "", "  ")
+		if err != nil {
+			return err
+		}
+
+		return os.WriteFile(settingsPath, data, 0o644)
 	}
 
-	hooksMap["Stop"] = stopHook
-	settings["hooks"] = hooksMap
-
-	// Write formatted JSON back to .claude/settings.json
-	data, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(settingsPath, data, 0o644)
+	return nil
 }
 
 // configureMCPServer injects the edio MCP server configuration into a target JSON file
