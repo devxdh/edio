@@ -62,15 +62,19 @@ func (s *Session) Restore(targetTurn int, filePath string) (string, error) {
 
 				var fullPath string
 				if filepath.IsAbs(trimmed) {
-					fullPath = trimmed
+					fullPath = filepath.Clean(trimmed)
 				} else {
-					fullPath = filepath.Join(repoRoot, trimmed)
+					fullPath = filepath.Join(repoRoot, filepath.FromSlash(trimmed))
 				}
 
 				if err := os.Remove(fullPath); err == nil {
 					// Clean up empty parent directories up to repo root
 					dir := filepath.Dir(fullPath)
-					for dir != "" && dir != repoRoot && strings.HasPrefix(dir, repoRoot) {
+					for {
+						rel, relErr := filepath.Rel(repoRoot, dir)
+						if relErr != nil || rel == "." || strings.HasPrefix(rel, "..") {
+							break
+						}
 						if err := os.Remove(dir); err != nil {
 							break
 						}

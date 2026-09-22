@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -108,7 +109,11 @@ func EnsureGitRepo() error {
 
 // GetRepoRoot returns the absolute filesystem path of the repository root directory.
 func GetRepoRoot() (string, error) {
-	return RunGit("rev-parse", "--show-toplevel")
+	out, err := RunGit("rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(out), nil
 }
 
 // HashBlob writes a single file into Git's object database (.git/objects/) as a blob.
