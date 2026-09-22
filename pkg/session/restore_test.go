@@ -97,11 +97,11 @@ func TestSessionRestore(t *testing.T) {
 
 	// 1. Verify files from Turn 1 are restored correctly
 	turn1Content, err := os.ReadFile(turn1File)
-	if err != nil || string(turn1Content) != "turn 1 content\n" {
+	if err != nil || normalizeLF(string(turn1Content)) != "turn 1 content\n" {
 		t.Fatalf("turn1.txt content mismatch: got %q, err: %v", string(turn1Content), err)
 	}
 	baseContent, err := os.ReadFile(baseFile)
-	if err != nil || string(baseContent) != "base modified in turn 1\n" {
+	if err != nil || normalizeLF(string(baseContent)) != "base modified in turn 1\n" {
 		t.Fatalf("base.txt content mismatch: got %q, err: %v", string(baseContent), err)
 	}
 
@@ -178,12 +178,16 @@ func TestSessionRestoreSingleFile(t *testing.T) {
 	}
 
 	contentA, _ := os.ReadFile(fileA)
-	if string(contentA) != "version 1 A\n" {
+	if normalizeLF(string(contentA)) != "version 1 A\n" {
 		t.Fatalf("fileA was not restored: got %q", string(contentA))
 	}
 
 	contentB, _ := os.ReadFile(fileB)
-	if string(contentB) != "version 2 B\n" {
+	if normalizeLF(string(contentB)) != "version 2 B\n" {
 		t.Fatalf("fileB should remain at version 2: got %q", string(contentB))
 	}
+}
+
+func normalizeLF(s string) string {
+	return strings.ReplaceAll(s, "\r\n", "\n")
 }

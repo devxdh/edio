@@ -55,6 +55,9 @@ func SetupTestRepo(tb testing.TB, prefix string) string {
 	if _, err := runGit("config", "user.email", "bot@edio.dev"); err != nil {
 		tb.Fatalf("failed to configure test user.email: %v", err)
 	}
+	if _, err := runGit("config", "core.autocrlf", "false"); err != nil {
+		tb.Fatalf("failed to configure test core.autocrlf: %v", err)
+	}
 
 	initFile := filepath.Join(tmpDir, "README.md")
 	if err := os.WriteFile(initFile, []byte("# Base Project\n"), 0o644); err != nil {
